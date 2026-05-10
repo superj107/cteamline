@@ -62,34 +62,42 @@
     }
 
     async function handleSearch() {
-      const dist = document.getElementById('distSelect').value;
-      const kw = document.getElementById('keyword').value;
-      const resDiv = document.getElementById('results');
-      resDiv.innerHTML = "<p style='text-align:center;'>搜尋中...</p>";
-
-      try {
-        const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
-          method: 'GET',
-          redirect: 'follow'
-        });
-        const data = await response.json();
-        resDiv.innerHTML = "";
-        if (data.length === 0) {
-          resDiv.innerHTML = "<p style='text-align:center;'>查無結果</p>";
-          return;
+          const dist = document.getElementById('distSelect').value;
+          const kw = document.getElementById('keyword').value;
+          const resDiv = document.getElementById('results');
+          resDiv.innerHTML = "<p style='text-align:center;'>搜尋中...</p>";
+    
+          try {
+            const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
+              method: 'GET',
+              redirect: 'follow'
+            });
+            const data = await response.json();
+            resDiv.innerHTML = "";
+            
+            if (data.length === 0) {
+              resDiv.innerHTML = "<p style='text-align:center;'>查無結果</p>";
+              return;
+            }
+    
+            data.forEach(item => {
+              resDiv.innerHTML += `
+                <div class="item">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <b style="color:#1DB446; font-size: 18px;">${item.name}</b>
+                    <span style="color:#e91e63; font-weight:bold; font-size: 20px;">${item.code}</span>
+                  </div>
+                  <div style="margin-top: 5px; font-size: 14px; color: #555;">
+                    📍 地址：${item.address}<br>
+                    👤 認養人：<span style="color: #2c3e50; font-weight: 500;">${item.adopter}</span><br>
+                    所屬單位：<span style="color: #2c3e50; font-weight: 500;">${item.unit}</span>
+                  </div>
+                </div>`;
+            });
+          } catch (err) {
+            resDiv.innerHTML = "搜尋出錯";
+          }
         }
-        data.forEach(item => {
-          resDiv.innerHTML += `
-            <div class="item">
-              <b style="color:#1DB446;">${item.name}</b><br>
-              代碼：<span style="color:#e91e63; font-weight:bold;">${item.code}</span><br>
-              <small style="color:#777;">${item.address}</small>
-            </div>`;
-        });
-      } catch (err) {
-        resDiv.innerHTML = "搜尋出錯";
-      }
-    }
-  </script>
+    </script>
 </body>
 </html>
