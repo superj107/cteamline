@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 15px; background: #f8f9fa; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    select, input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
+    button { background: #1DB446; color: white; border: none; font-weight: bold; }
+    #loader { text-align: center; color: #888; padding: 20px; }
+    .item { padding: 12px; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h3 style="text-align:center; color:#1DB446;">社區代碼查詢</h3>
+    <div id="loader">正在連線到資料庫...</div>
+    <div id="main-ui" style="display:none;">
+      <select id="distSelect"></select>
+      <input type="text" id="keyword" placeholder="請輸入社區或路名關鍵字">
+      <button id="searchBtn" onclick="handleSearch()">立即搜尋</button>
+      <div id="results"></div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * 🚀 部署後填入 URL，例如：https://script.google.com/macros/s/xxxx/exec
+     */
+    const API_URL = "https://script.google.com/macros/s/AKfycby3CKrWqOb_bFnwV7GL4EwHF0L44czo4VwBnyVk51jXeMOw3RRm942Sjjza0SE0kFY/exec";
+
+    window.onload = function() {
+      liff.init({ liffId: "2010021235-m0rWdR4i" }).then(() => {
+        initData();
+      }).catch(err => { document.getElementById('loader').innerText = "LIFF 載入失敗"; });
+    };
+
+    async function initData() {
+      try {
+        const resp = await fetch(`${API_URL}?action=getDistricts`);
+        const list = await resp.json();
+        const select = document.getElementById('distSelect');
+        list.forEach(d => {
+          let opt = document.createElement('option');
+          opt.value = opt.textContent = d;
+          select.appendChild(opt);
+        });
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('main-ui').style.display = 'block';
+      } catch (e) {
+        document.getElementById('loader').innerText = "連線超時，請檢查網路或重新開啟";
+      }
+    }
+
+    async function handleSearch() {
+      const dist = document.getElementById('distSelect').value;
+      const kw = document.getElementById('keyword').value;
+      const resDiv = document.getElementById('results');
+      resDiv.innerHTML = "<p style='text-align:center;'>搜尋中...</p>";
+      
+      try {
+        const resp = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`);
+        const data = await resp.json();
+        resDiv.innerHTML = "";
+        if (data.length === 0) { resDiv.innerHTML = "找不到結果"; return; }
+        data.forEach(item => {
+          resDiv.innerHTML += `
+            <div class="item">
+              <b style="color:#1DB446;">${item.name}</b><br>
+              代碼：<span style="color:#e91e63; font-weight:bold;">${item.code}</span><br>
+              <small style="color:#777;">${item.address}</small>
+            </div>`;
+        });
+      } catch (e) { resDiv.innerHTML = "搜尋出錯"; }
+    }
+  </script>
+</body>
+</html>
