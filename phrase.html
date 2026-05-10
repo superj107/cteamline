@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>申辦片語產生器</title>
+    <style>
+        body { font-family: -apple-system, "Helvetica Neue", sans-serif; background-color: #f0f4f3; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #1DB446; margin-bottom: 20px; font-size: 22px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border 0.3s; }
+        input:focus { border-color: #1DB446; outline: none; }
+        button { width: 100%; padding: 14px; background-color: #1DB446; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
+        button:active { background-color: #158f37; }
+        #result-area { margin-top: 25px; display: none; }
+        .result-box { background: #f9f9f9; border: 1.5px dashed #1DB446; padding: 15px; border-radius: 10px; white-space: pre-wrap; font-size: 15px; line-height: 1.6; position: relative; }
+        .copy-btn { background-color: #e91e63; margin-top: 10px; font-size: 16px; }
+        .section-title { border-left: 4px solid #1DB446; padding-left: 10px; margin: 20px 0 10px 0; font-size: 16px; color: #1DB446; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📝 申辦片語產生器</h2>
+    
+    <div class="section-title">基本資料</div>
+    <div class="input-group">
+        <label>客戶姓名</label>
+        <input type="text" id="custName" placeholder="例如：王小明">
+    </div>
+    <div class="input-group">
+        <label>聯絡電話</label>
+        <input type="tel" id="custPhone" placeholder="例如：0912345678">
+    </div>
+
+    <div class="section-title">申辦資訊</div>
+    <div class="input-group">
+        <label>申辦內容</label>
+        <input type="text" id="applyContent" placeholder="例如：5G 999 方案">
+    </div>
+    <div class="input-group">
+        <label>社區名稱／識別碼</label>
+        <input type="text" id="commId" placeholder="例如：幸福社區 / C001">
+    </div>
+    <div class="input-group">
+        <label>優惠券號 (F000專屬)</label>
+        <input type="text" id="couponCode" placeholder="請輸入領取的優惠券號">
+    </div>
+    <div class="input-group">
+        <label>推廣人員編號</label>
+        <input type="text" id="staffId" placeholder="例如：EMP12345">
+    </div>
+    <div class="input-group">
+        <label>前往門市名稱</label>
+        <input type="text" id="storeName" placeholder="例如：台北信義門市">
+    </div>
+
+    <button onclick="generatePhrase()">✨ 開始合併片語</button>
+
+    <div id="result-area">
+        <div class="section-title">預覽結果</div>
+        <div class="result-box" id="phraseResult"></div>
+        <button class="copy-btn" onclick="copyPhrase()">📋 複製完整片語</button>
+    </div>
+</div>
+
+<script>
+    function generatePhrase() {
+        // 抓取輸入值
+        const data = {
+            name: document.getElementById('custName').value || "(未填)",
+            phone: document.getElementById('custPhone').value || "(未填)",
+            content: document.getElementById('applyContent').value || "(未填)",
+            comm: document.getElementById('commId').value || "(未填)",
+            coupon: document.getElementById('couponCode').value || "(未填)",
+            staff: document.getElementById('staffId').value || "(未填)",
+            store: document.getElementById('storeName').value || "(未填)"
+        };
+
+        // 組成模板
+        const phrase = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
+
+📌 基本資料
+・客戶姓名：${data.name}
+・聯絡電話：${data.phone}
+
+📌 申辦資訊
+・申辦內容：${data.content}
+・社區名稱／社區識別碼：${data.comm}
+・社區優惠專屬優惠序號：F000（${data.coupon}）
+・推廣人員編：${data.staff}
+・類型：社區團隊推廣案(請門市備註)
+・前往門市名稱：${data.store}
+
+📍 溫馨提醒（避免白跑一趟）
+・請攜帶身分證及第二證件（如健保卡或駕照）
+😊 建議可先確認門市營業時間：https://123.cht.com.tw/ServiceCenter`;
+
+        document.getElementById('phraseResult').innerText = phrase;
+        document.getElementById('result-area').style.display = 'block';
+        
+        // 自動捲動到底部
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+
+    function copyPhrase() {
+        const text = document.getElementById('phraseResult').innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            alert('片語已複製到剪貼簿！');
+        });
+    }
+</script>
+
+</body>
+</html>
