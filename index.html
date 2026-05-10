@@ -1,45 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>社區代碼查詢</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f8f9fa; }
-    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    body { font-family: -apple-system, sans-serif; padding: 15px; background: #f8f9fa; margin: 0; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+    h3 { margin-top: 0; color: #1DB446; text-align: center; }
     select, input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
-    button { background: #1DB446; color: white; border: none; font-weight: bold; }
+    button { background: #1DB446; color: white; border: none; font-weight: bold; cursor: pointer; }
     #loader { text-align: center; color: #888; padding: 20px; }
-    .item { padding: 12px; border-bottom: 1px solid #eee; }
+    .item { background: #fff; padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h3 style="text-align:center; color:#1DB446;">社區代碼查詢</h3>
-    <div id="loader">正在連線到資料庫...</div>
+    <h3>🏢 社區代碼查詢</h3>
+    <div id="loader">正在連線至資料庫...</div>
     <div id="main-ui" style="display:none;">
+      <label style="font-size: 14px; color: #666;">選擇行政區</label>
       <select id="distSelect"></select>
-      <input type="text" id="keyword" placeholder="請輸入社區或路名關鍵字">
+      <label style="font-size: 14px; color: #666;">關鍵字 (路名或社區名)</label>
+      <input type="text" id="keyword" placeholder="請輸入關鍵字">
       <button id="searchBtn" onclick="handleSearch()">立即搜尋</button>
       <div id="results"></div>
     </div>
   </div>
 
   <script>
-    /**
-     * 🚀 部署後填入 URL，例如：https://script.google.com/macros/s/xxxx/exec
-     */
+    // 🚀 指向你的 GAS Web App URL
     const API_URL = "https://script.google.com/macros/s/AKfycby3CKrWqOb_bFnwV7GL4EwHF0L44czo4VwBnyVk51jXeMOw3RRm942Sjjza0SE0kFY/exec";
 
     window.onload = function() {
       liff.init({ liffId: "2010021235-m0rWdR4i" }).then(() => {
         initData();
-      }).catch(err => { document.getElementById('loader').innerText = "LIFF 載入失敗"; });
+      }).catch(err => {
+        document.getElementById('loader').innerHTML = "LIFF 初始化失敗";
+      });
     };
 
     async function initData() {
       try {
-        const resp = await fetch(`${API_URL}?action=getDistricts`);
-        const list = await resp.json();
+        const response = await fetch(`${API_URL}?action=getDistricts`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const list = await response.json();
         const select = document.getElementById('distSelect');
         list.forEach(d => {
           let opt = document.createElement('option');
@@ -48,8 +56,8 @@
         });
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
-      } catch (e) {
-        document.getElementById('loader').innerText = "連線超時，請檢查網路或重新開啟";
+      } catch (err) {
+        document.getElementById('loader').innerHTML = "連線異常，請確認網路連線";
       }
     }
 
@@ -58,12 +66,18 @@
       const kw = document.getElementById('keyword').value;
       const resDiv = document.getElementById('results');
       resDiv.innerHTML = "<p style='text-align:center;'>搜尋中...</p>";
-      
+
       try {
-        const resp = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`);
-        const data = await resp.json();
+        const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const data = await response.json();
         resDiv.innerHTML = "";
-        if (data.length === 0) { resDiv.innerHTML = "找不到結果"; return; }
+        if (data.length === 0) {
+          resDiv.innerHTML = "<p style='text-align:center;'>查無結果</p>";
+          return;
+        }
         data.forEach(item => {
           resDiv.innerHTML += `
             <div class="item">
@@ -72,7 +86,9 @@
               <small style="color:#777;">${item.address}</small>
             </div>`;
         });
-      } catch (e) { resDiv.innerHTML = "搜尋出錯"; }
+      } catch (err) {
+        resDiv.innerHTML = "搜尋出錯";
+      }
     }
   </script>
 </body>
