@@ -57,7 +57,7 @@
 </div>
 
 <script>
-    function generatePhrase() {
+function generatePhrase() {
         // 抓取輸入值
         const data = {
             content: document.getElementById('applyContent').value || "(未填)",
@@ -67,8 +67,8 @@
             store: document.getElementById('storeName').value || "(未填)"
         };
 
-        // 組成模板
-        const phrase = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
+        // 組成模板 (HTML 格式用於網頁顯示)
+        const phraseHTML = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
 
 📍 溫馨提醒（避免白跑一趟）
 ・請攜帶身分證及第二證件（如健保卡或駕照）        
@@ -83,9 +83,8 @@
 
 😊 建議可先確認門市營業時間：<a href="https://reurl.cc/N2EK5x" target="_blank" style="color: #1DB446; text-decoration: underline;">https://reurl.cc/N2EK5x</a>`;
 
-        
-
-        document.getElementById('phraseResult').innerText = phrase;
+        // 🚀 關鍵修正：使用 innerHTML 讓超連結生效
+        document.getElementById('phraseResult').innerHTML = phraseHTML;
         document.getElementById('result-area').style.display = 'block';
         
         // 自動捲動到底部
@@ -93,9 +92,10 @@
     }
 
     function copyPhrase() {
+        // 🚀 關鍵修正：複製時使用 innerText 取得純文字內容，這樣就不會複製到 <a> 標籤
         const text = document.getElementById('phraseResult').innerText;
         navigator.clipboard.writeText(text).then(() => {
-            alert('片語已複製到剪貼簿！');
+            alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)');
         });
     }
 </script>
