@@ -25,16 +25,6 @@
 <div class="container">
     <h2>📝 申辦片語產生器</h2>
     
-    <div class="section-title">基本資料</div>
-    <div class="input-group">
-        <label>客戶姓名</label>
-        <input type="text" id="custName" placeholder="例如：王小明">
-    </div>
-    <div class="input-group">
-        <label>聯絡電話</label>
-        <input type="tel" id="custPhone" placeholder="例如：0912345678">
-    </div>
-
     <div class="section-title">申辦資訊</div>
     <div class="input-group">
         <label>申辦內容</label>
@@ -70,8 +60,6 @@
     function generatePhrase() {
         // 抓取輸入值
         const data = {
-            name: document.getElementById('custName').value || "(未填)",
-            phone: document.getElementById('custPhone').value || "(未填)",
             content: document.getElementById('applyContent').value || "(未填)",
             comm: document.getElementById('commId').value || "(未填)",
             coupon: document.getElementById('couponCode').value || "(未填)",
@@ -81,10 +69,6 @@
 
         // 組成模板
         const phrase = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
-
-📌 基本資料
-・客戶姓名：${data.name}
-・聯絡電話：${data.phone}
 
 📌 申辦資訊
 ・申辦內容：${data.content}
