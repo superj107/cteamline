@@ -6,41 +6,56 @@
   <title>社區代碼查詢</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; padding: 15px; background: #f8f9fa; margin: 0; }
+    body { font-family: -apple-system, "Helvetica Neue", sans-serif; padding: 15px; background: #f8f9fa; margin: 0; }
     .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
     h3 { margin-top: 0; color: #1DB446; text-align: center; }
-    select, input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; }
-    button { background: #1DB446; color: white; border: none; font-weight: bold; cursor: pointer; }
+    label { font-size: 14px; color: #666; font-weight: bold; }
+    select, input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; box-sizing: border-box; transition: border 0.3s; }
+    input:focus { border-color: #1DB446; outline: none; }
+    button { background: #1DB446; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 5px; }
+    button:active { background: #158f37; }
     #loader { text-align: center; color: #888; padding: 20px; }
-    .item { background: #fff; padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; }
+    .item { background: #fff; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
+    .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .item-name { color: #1DB446; font-size: 18px; font-weight: bold; }
+    .item-code { color: #e91e63; font-weight: bold; font-size: 20px; }
+    .item-detail { font-size: 14px; color: #555; line-height: 1.6; }
+    .highlight { color: #2c3e50; font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="card">
     <h3>🏢 社區代碼查詢</h3>
     <div id="loader">正在連線至資料庫...</div>
+    
     <div id="main-ui" style="display:none;">
-      <label style="font-size: 14px; color: #666;">選擇行政區</label>
+      <label>選擇行政區</label>
       <select id="distSelect"></select>
-      <label style="font-size: 14px; color: #666;">關鍵字 (路名或社區名)</label>
-      <input type="text" id="keyword" placeholder="請輸入關鍵字">
+      
+      <label>關鍵字 (路名或社區名)</label>
+      <input type="text" id="keyword" placeholder="例如：中山路 或 幸福社區">
+      
       <button id="searchBtn" onclick="handleSearch()">立即搜尋</button>
-      <div id="results"></div>
+      
+      <div id="results" style="margin-top: 20px;"></div>
     </div>
   </div>
 
   <script>
-    // 🚀 指向你的 GAS Web App URL
-    const API_URL = "https://script.google.com/macros/s/AKfycby3CKrWqOb_bFnwV7GL4EwHF0L44czo4VwBnyVk51jXeMOw3RRm942Sjjza0SE0kFY/exec";
+    // 🚀 請確認此 URL 與你最新部署的 GAS Web App URL 一致
+    const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
 
     window.onload = function() {
+      // 初始化 LIFF
       liff.init({ liffId: "2010021235-m0rWdR4i" }).then(() => {
         initData();
       }).catch(err => {
-        document.getElementById('loader').innerHTML = "LIFF 初始化失敗";
+        console.error(err);
+        document.getElementById('loader').innerHTML = "LIFF 初始化失敗，請於 LINE 中開啟";
       });
     };
 
+    // 初始化：抓取行政區選單
     async function initData() {
       try {
         const response = await fetch(`${API_URL}?action=getDistricts`, {
@@ -49,56 +64,65 @@
         });
         const list = await response.json();
         const select = document.getElementById('distSelect');
+        
         list.forEach(d => {
           let opt = document.createElement('option');
           opt.value = opt.textContent = d;
           select.appendChild(opt);
         });
+        
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
       } catch (err) {
-        document.getElementById('loader').innerHTML = "連線異常，請確認網路連線";
+        document.getElementById('loader').innerHTML = "連線異常，請重新開啟頁面";
       }
     }
 
+    // 搜尋邏輯
     async function handleSearch() {
-          const dist = document.getElementById('distSelect').value;
-          const kw = document.getElementById('keyword').value;
-          const resDiv = document.getElementById('results');
-          resDiv.innerHTML = "<p style='text-align:center;'>搜尋中...</p>";
-    
-          try {
-            const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
-              method: 'GET',
-              redirect: 'follow'
-            });
-            const data = await response.json();
-            resDiv.innerHTML = "";
-            
-            if (data.length === 0) {
-              resDiv.innerHTML = "<p style='text-align:center;'>查無結果</p>";
-              return;
-            }
-    
-            data.forEach(item => {
-              resDiv.innerHTML += `
-                <div class="item">
-                  <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <b style="color:#1DB446; font-size: 18px;">${item.name}</b>
-                    <span style="color:#e91e63; font-weight:bold; font-size: 20px;">${item.code}</span>
-                  </div>
-                  <div style="margin-top: 5px; font-size: 14px; color: #555;">
-                    📍 地址：${item.address}<br>
-                    👥 社區分群：${item.group}<br>
-                    👤 認養人：<span style="color: #2c3e50; font-weight: 500;">${item.adopter}</span><br>
-                    所屬單位：<span style="color: #2c3e50; font-weight: 500;">${item.unit}</span>
-                  </div>
-                </div>`;
-            });
-          } catch (err) {
-            resDiv.innerHTML = "搜尋出錯";
-          }
+      const dist = document.getElementById('distSelect').value;
+      const kw = document.getElementById('keyword').value;
+      const resDiv = document.getElementById('results');
+      
+      resDiv.innerHTML = "<p style='text-align:center; color: #888;'>🔍 搜尋中...</p>";
+
+      try {
+        const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const data = await response.json();
+        
+        if (!data || data.length === 0) {
+          resDiv.innerHTML = "<p style='text-align:center; color: #888;'>查無結果，請換個關鍵字試試</p>";
+          return;
         }
-    </script>
+
+        // 效能優化：先組成 HTML 字串再一次寫入
+        let htmlContent = "";
+        data.forEach(item => {
+          htmlContent += `
+            <div class="item">
+              <div class="item-header">
+                <span class="item-name">${item.name}</span>
+                <span class="item-code">${item.code}</span>
+              </div>
+              <div class="item-detail">
+                📍 地址：${item.address}<br>
+                👥 社區分群：<span class="highlight">${item.group || "無"}</span><br>
+                👤 認養人：<span class="highlight">${item.adopter}</span><br>
+                🏢 所屬單位：<span class="highlight">${item.unit}</span>
+              </div>
+            </div>`;
+        });
+        
+        resDiv.innerHTML = htmlContent;
+        
+      } catch (err) {
+        console.error(err);
+        resDiv.innerHTML = "<p style='text-align:center; color: red;'>搜尋發生錯誤，請稍後再試</p>";
+      }
+    }
+  </script>
 </body>
 </html>
