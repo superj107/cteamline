@@ -10,30 +10,23 @@
         h2 { text-align: center; color: #1DB446; margin-bottom: 20px; font-size: 22px; }
         .input-group { margin-bottom: 15px; }
         label { display: block; font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border 0.3s; }
-        input:focus { border-color: #1DB446; outline: none; }
-
-        /* 🚀 新增：序號欄位被自動帶入時的視覺提示 */
+        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border 0.3s; background: white; }
+        input:focus, select:focus { border-color: #1DB446; outline: none; }
         input.auto-filled { border-color: #1DB446; background-color: #f0fff4; }
-
+        input.readonly-filled { border-color: #1DB446; background-color: #f0fff4; color: #1DB446; font-weight: bold; }
+        select:disabled { background-color: #f5f5f5; color: #aaa; cursor: not-allowed; }
         button { width: 100%; padding: 14px; background-color: #1DB446; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
         button:active { background-color: #158f37; }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
         #result-area { margin-top: 25px; display: none; }
-        .result-box { background: #f9f9f9; border: 1.5px dashed #1DB446; padding: 15px; border-radius: 10px; white-space: pre-wrap; font-size: 15px; line-height: 1.6; position: relative; }
+        .result-box { background: #f9f9f9; border: 1.5px dashed #1DB446; padding: 15px; border-radius: 10px; white-space: pre-wrap; font-size: 15px; line-height: 1.6; }
         .copy-btn { background-color: #e91e63; margin-top: 10px; font-size: 16px; }
-        .section-title { border-left: 4px solid #1DB446; padding-left: 10px; margin: 20px 0 10px 0; font-size: 16px; color: #1DB446; }
-
-        /* 🚀 新增：自動帶入提示 banner */
-        .auto-fill-banner {
-            background: #f0fff4;
-            border: 1px solid #1DB446;
-            border-radius: 8px;
-            padding: 10px 14px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            color: #1DB446;
-            display: none;
-        }
+        .section-title { border-left: 4px solid #1DB446; padding-left: 10px; margin: 20px 0 10px 0; font-size: 16px; color: #1DB446; font-weight: bold; }
+        .auto-fill-banner { background: #f0fff4; border: 1px solid #1DB446; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; color: #1DB446; display: none; }
+        #planPreview { display: none; background: #f0fff4; border: 1px solid #1DB446; border-radius: 8px; padding: 12px 14px; margin-top: 8px; font-size: 13px; color: #333; line-height: 1.8; }
+        #planPreview span { color: #1DB446; font-weight: bold; }
+        #loadingMsg { text-align: center; color: #888; font-size: 14px; padding: 8px 0; display: none; }
+        .error-msg { color: #e53935; font-size: 13px; margin-top: 6px; display: none; }
     </style>
 </head>
 <body>
@@ -41,34 +34,73 @@
 <div class="container">
     <h2>📝 申辦片語產生器</h2>
 
-    <!-- 🚀 新增：自動帶入提示，只有從 LINE 帶序號過來才顯示 -->
     <div class="auto-fill-banner" id="autoBanner">
         ✅ 優惠序號已自動帶入，請填寫其他資訊後按下合併。
     </div>
 
-    <div class="section-title">申辦資訊</div>
+    <!-- ── 方案選擇（連動，資料從 Sheet 載入）── -->
+    <div class="section-title">方案選擇</div>
+    <div id="loadingMsg">⏳ 載入方案資料中...</div>
+    <div class="error-msg" id="loadError">❌ 方案資料載入失敗，請重新整理頁面。</div>
+
     <div class="input-group">
-        <label>申辦內容</label>
-        <input type="text" id="applyContent" placeholder="例如：升速300M社區方案">
+        <label>① 方案別</label>
+        <select id="selPlan" onchange="onPlanChange()" disabled>
+            <option value="">── 載入中 ──</option>
+        </select>
     </div>
+
+    <div class="input-group">
+        <label>② 新租速率</label>
+        <select id="selSpeed" onchange="onSpeedChange()" disabled>
+            <option value="">── 請先選方案別 ──</option>
+        </select>
+    </div>
+
+    <div class="input-group">
+        <label>③ 社區分群</label>
+        <select id="selGroup" onchange="onGroupChange()" disabled>
+            <option value="">── 請先選速率 ──</option>
+        </select>
+    </div>
+
+    <!-- 選完後的預覽小卡 -->
+    <div id="planPreview"></div>
+
+    <!-- ── 申辦資訊 ── -->
+    <div class="section-title">申辦資訊</div>
+
+    <div class="input-group">
+        <label>社區優惠碼（自動帶入）</label>
+        <input type="text" id="planCouponCode" readonly placeholder="選完方案後自動填入">
+    </div>
+
+    <div class="input-group">
+        <label>方案代碼（自動帶入）</label>
+        <input type="text" id="planCode" readonly placeholder="選完方案後自動填入">
+    </div>
+
     <div class="input-group">
         <label>社區名稱／識別碼</label>
-        <input type="text" id="commId" placeholder="例如：幸福社區 / SH0001">
+        <input type="text" id="commId" placeholder="例如：幸福社區 / C001">
     </div>
+
     <div class="input-group">
         <label>優惠券號 (F000專屬)</label>
         <input type="text" id="couponCode" placeholder="請輸入領取的優惠券號">
     </div>
+
     <div class="input-group">
         <label>推廣人員編號</label>
-        <input type="text" id="staffId" placeholder="例如：123456">
+        <input type="text" id="staffId" placeholder="例如：EMP12345">
     </div>
+
     <div class="input-group">
         <label>前往門市名稱</label>
         <input type="text" id="storeName" placeholder="例如：新北永和門市">
     </div>
 
-    <button onclick="generatePhrase()">✨ 開始合併片語</button>
+    <button id="generateBtn" onclick="generatePhrase()" disabled>✨ 開始合併片語</button>
 
     <div id="result-area">
         <div class="section-title">預覽結果</div>
@@ -78,54 +110,191 @@
 </div>
 
 <script>
-    // 🚀 新增：頁面載入時，讀取 URL 帶來的序號並自動填入
-    window.onload = function() {
+    // ── GAS API URL（與 index.html 相同）──
+    const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
+
+    // 從 Sheet 載入的原始資料，格式：[{ plan, speed, coupon, group, code }, ...]
+    let PLAN_ROWS = [];
+
+    // ── 頁面初始化 ──
+    window.onload = async function() {
+        // 1. URL 帶入序號
         const params = new URLSearchParams(window.location.search);
         const coupon = params.get('coupon');
         if (coupon) {
             const input = document.getElementById('couponCode');
             input.value = coupon;
-            // 加上綠色邊框，讓使用者知道這欄是自動帶入的
             input.classList.add('auto-filled');
-            // 顯示提示 banner
             document.getElementById('autoBanner').style.display = 'block';
         }
+
+        // 2. 從 GAS 載入方案資料
+        await loadPlanData();
     };
 
+    async function loadPlanData() {
+        const loadingMsg = document.getElementById('loadingMsg');
+        const loadError  = document.getElementById('loadError');
+        loadingMsg.style.display = 'block';
+
+        try {
+            const res  = await fetch(`${API_URL}?action=getPlanData`, { redirect: 'follow' });
+            const data = await res.json();
+
+            if (!Array.isArray(data) || data.error) {
+                throw new Error(data.error || "回傳格式錯誤");
+            }
+
+            PLAN_ROWS = data;
+            buildPlanSelect();
+            document.getElementById('generateBtn').disabled = false;
+
+        } catch (err) {
+            console.error("loadPlanData error:", err);
+            loadError.style.display = 'block';
+        } finally {
+            loadingMsg.style.display = 'none';
+        }
+    }
+
+    // 建立「方案別」下拉（去重）
+    function buildPlanSelect() {
+        const plans = [...new Set(PLAN_ROWS.map(r => r.plan))];
+        const sel = document.getElementById('selPlan');
+        sel.innerHTML = '<option value="">── 請選擇方案別 ──</option>';
+        plans.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = opt.textContent = p;
+            sel.appendChild(opt);
+        });
+        sel.disabled = false;
+    }
+
+    // ── 連動邏輯 ──
+    function onPlanChange() {
+        const plan = document.getElementById('selPlan').value;
+        const selSpeed = document.getElementById('selSpeed');
+        const selGroup = document.getElementById('selGroup');
+
+        selSpeed.innerHTML = '<option value="">── 請選擇速率 ──</option>';
+        selGroup.innerHTML = '<option value="">── 請先選速率 ──</option>';
+        selGroup.disabled = true;
+        clearPlanResult();
+
+        if (!plan) { selSpeed.disabled = true; return; }
+
+        const speeds = [...new Set(
+            PLAN_ROWS.filter(r => r.plan === plan).map(r => r.speed)
+        )];
+        speeds.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = opt.textContent = s;
+            selSpeed.appendChild(opt);
+        });
+        selSpeed.disabled = false;
+    }
+
+    function onSpeedChange() {
+        const plan  = document.getElementById('selPlan').value;
+        const speed = document.getElementById('selSpeed').value;
+        const selGroup = document.getElementById('selGroup');
+
+        selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
+        clearPlanResult();
+
+        if (!speed) { selGroup.disabled = true; return; }
+
+        const groups = [...new Set(
+            PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed).map(r => r.group)
+        )];
+        groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = opt.textContent = g;
+            selGroup.appendChild(opt);
+        });
+        selGroup.disabled = false;
+    }
+
+    function onGroupChange() {
+        const plan  = document.getElementById('selPlan').value;
+        const speed = document.getElementById('selSpeed').value;
+        const group = document.getElementById('selGroup').value;
+
+        if (!group) { clearPlanResult(); return; }
+
+        const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.group === group);
+        if (!match) { clearPlanResult(); return; }
+
+        // 寫入唯讀欄位
+        const couponInput = document.getElementById('planCouponCode');
+        const codeInput   = document.getElementById('planCode');
+        couponInput.value = match.coupon;
+        codeInput.value   = match.code;
+        couponInput.classList.add('readonly-filled');
+        codeInput.classList.add('readonly-filled');
+
+        // 預覽小卡
+        const preview = document.getElementById('planPreview');
+        preview.style.display = 'block';
+        preview.innerHTML = `
+            📋 方案確認<br>
+            ・方案別：<span>${plan}</span><br>
+            ・速率：<span>${speed}</span><br>
+            ・分群：<span>${group}</span><br>
+            ・社區優惠碼：<span>${match.coupon}</span><br>
+            ・方案代碼：<span>${match.code}</span>
+        `;
+    }
+
+    function clearPlanResult() {
+        ['planCouponCode', 'planCode'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.classList.remove('readonly-filled');
+        });
+        const preview = document.getElementById('planPreview');
+        preview.style.display = 'none';
+        preview.innerHTML = '';
+    }
+
+    // ── 產生片語 ──
     function generatePhrase() {
-        const data = {
-            content: document.getElementById('applyContent').value || "(未填)",
-            comm:    document.getElementById('commId').value || "(未填)",
-            coupon:  document.getElementById('couponCode').value || "(未填)",
-            staff:   document.getElementById('staffId').value || "(未填)",
-            store:   document.getElementById('storeName').value || "(未填)"
-        };
+        const plan       = document.getElementById('selPlan').value || "(未選)";
+        const speed      = document.getElementById('selSpeed').value || "(未選)";
+        const group      = document.getElementById('selGroup').value || "(未選)";
+        const planCoupon = document.getElementById('planCouponCode').value || "(未填)";
+        const planCode   = document.getElementById('planCode').value || "(未填)";
+        const comm       = document.getElementById('commId').value || "(未填)";
+        const coupon     = document.getElementById('couponCode').value || "(未填)";
+        const staff      = document.getElementById('staffId').value || "(未填)";
+        const store      = document.getElementById('storeName').value || "(未填)";
 
         const phraseHTML = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
 
 📍 溫馨提醒（避免白跑一趟）
-・請攜帶身分證及第二證件（如健保卡或駕照）        
+・請攜帶身分證及第二證件（如健保卡或駕照）
 
 📌 申辦資訊
-・申辦內容：${data.content}
-・社區名稱／社區識別碼：${data.comm}
-・社區優惠專屬優惠序號：F000（${data.coupon}）
-・推廣人員編：${data.staff}
+・申辦內容：${plan} ${speed}
+・社區分群：${group}
+・社區優惠碼：${planCoupon}
+・方案代碼：${planCode}
+・社區名稱／社區識別碼：${comm}
+・社區優惠專屬優惠序號：F000（${coupon}）
+・推廣人員編：${staff}
 ・類型：社區團隊推廣案(請門市備註)
-・前往門市名稱：${data.store}
+・前往門市名稱：${store}
 
 😊 建議可先確認門市營業時間：<a href="https://reurl.cc/N2EK5x" target="_blank" style="color: #1DB446; text-decoration: underline;">https://reurl.cc/N2EK5x</a>`;
 
         document.getElementById('phraseResult').innerHTML = phraseHTML;
         document.getElementById('result-area').style.display = 'block';
-
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
+    // ── 複製片語（含 fallback）──
     function copyPhrase() {
         const text = document.getElementById('phraseResult').innerText;
-
-        // 🚀 修正：加入 clipboard fallback，解決 LINE WebView 不支援的問題
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text)
                 .then(() => alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)'))
@@ -135,7 +304,6 @@
         }
     }
 
-    // 🚀 新增：舊式複製方法，相容 LINE Android WebView
     function fallbackCopy(text) {
         const ta = document.createElement('textarea');
         ta.value = text;
