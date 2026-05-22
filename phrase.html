@@ -12,19 +12,40 @@
         label { display: block; font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
         input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border 0.3s; }
         input:focus { border-color: #1DB446; outline: none; }
+
+        /* 🚀 新增：序號欄位被自動帶入時的視覺提示 */
+        input.auto-filled { border-color: #1DB446; background-color: #f0fff4; }
+
         button { width: 100%; padding: 14px; background-color: #1DB446; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
         button:active { background-color: #158f37; }
         #result-area { margin-top: 25px; display: none; }
         .result-box { background: #f9f9f9; border: 1.5px dashed #1DB446; padding: 15px; border-radius: 10px; white-space: pre-wrap; font-size: 15px; line-height: 1.6; position: relative; }
         .copy-btn { background-color: #e91e63; margin-top: 10px; font-size: 16px; }
         .section-title { border-left: 4px solid #1DB446; padding-left: 10px; margin: 20px 0 10px 0; font-size: 16px; color: #1DB446; }
+
+        /* 🚀 新增：自動帶入提示 banner */
+        .auto-fill-banner {
+            background: #f0fff4;
+            border: 1px solid #1DB446;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #1DB446;
+            display: none;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>📝 申辦片語產生器</h2>
-    
+
+    <!-- 🚀 新增：自動帶入提示，只有從 LINE 帶序號過來才顯示 -->
+    <div class="auto-fill-banner" id="autoBanner">
+        ✅ 優惠序號已自動帶入，請填寫其他資訊後按下合併。
+    </div>
+
     <div class="section-title">申辦資訊</div>
     <div class="input-group">
         <label>申辦內容</label>
@@ -57,17 +78,29 @@
 </div>
 
 <script>
-function generatePhrase() {
-        // 抓取輸入值
+    // 🚀 新增：頁面載入時，讀取 URL 帶來的序號並自動填入
+    window.onload = function() {
+        const params = new URLSearchParams(window.location.search);
+        const coupon = params.get('coupon');
+        if (coupon) {
+            const input = document.getElementById('couponCode');
+            input.value = coupon;
+            // 加上綠色邊框，讓使用者知道這欄是自動帶入的
+            input.classList.add('auto-filled');
+            // 顯示提示 banner
+            document.getElementById('autoBanner').style.display = 'block';
+        }
+    };
+
+    function generatePhrase() {
         const data = {
             content: document.getElementById('applyContent').value || "(未填)",
-            comm: document.getElementById('commId').value || "(未填)",
-            coupon: document.getElementById('couponCode').value || "(未填)",
-            staff: document.getElementById('staffId').value || "(未填)",
-            store: document.getElementById('storeName').value || "(未填)"
+            comm:    document.getElementById('commId').value || "(未填)",
+            coupon:  document.getElementById('couponCode').value || "(未填)",
+            staff:   document.getElementById('staffId').value || "(未填)",
+            store:   document.getElementById('storeName').value || "(未填)"
         };
 
-        // 組成模板 (HTML 格式用於網頁顯示)
         const phraseHTML = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
 
 📍 溫馨提醒（避免白跑一趟）
@@ -83,20 +116,43 @@ function generatePhrase() {
 
 😊 建議可先確認門市營業時間：<a href="https://reurl.cc/N2EK5x" target="_blank" style="color: #1DB446; text-decoration: underline;">https://reurl.cc/N2EK5x</a>`;
 
-        // 🚀 關鍵修正：使用 innerHTML 讓超連結生效
         document.getElementById('phraseResult').innerHTML = phraseHTML;
         document.getElementById('result-area').style.display = 'block';
-        
-        // 自動捲動到底部
+
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
     function copyPhrase() {
-        // 🚀 關鍵修正：複製時使用 innerText 取得純文字內容，這樣就不會複製到 <a> 標籤
         const text = document.getElementById('phraseResult').innerText;
-        navigator.clipboard.writeText(text).then(() => {
+
+        // 🚀 修正：加入 clipboard fallback，解決 LINE WebView 不支援的問題
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text)
+                .then(() => alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)'))
+                .catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    // 🚀 新增：舊式複製方法，相容 LINE Android WebView
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
             alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)');
-        });
+        } catch (err) {
+            alert('自動複製失敗，請手動長按文字區域複製。');
+        }
+        document.body.removeChild(ta);
     }
 </script>
 
