@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>申辦片語產生器</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: -apple-system, "Helvetica Neue", sans-serif; background-color: #f0f4f3; margin: 0; padding: 15px; color: #333; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -27,6 +28,8 @@
         #planPreview span { color: #1DB446; font-weight: bold; }
         #loadingMsg { text-align: center; color: #888; font-size: 14px; padding: 8px 0; display: none; }
         .error-msg { color: #e53935; font-size: 13px; margin-top: 6px; display: none; }
+        .lead-yes-note { background: #fff8e1; border: 1px solid #f0a500; border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 13px; color: #8a6d00; display: none; }
+        .save-status { text-align: center; font-size: 13px; color: #888; margin-top: 8px; display: none; }
     </style>
 </head>
 <body>
@@ -100,6 +103,18 @@
         <input type="text" id="storeName" placeholder="例如：新北永和門市">
     </div>
 
+    <!-- 🚀 新增：是否為LINE商機通報案 -->
+    <div class="input-group">
+        <label>是否為 LINE 商機通報案</label>
+        <select id="selLineLead" onchange="onLineLeadChange()">
+            <option value="否">否</option>
+            <option value="是">是</option>
+        </select>
+        <div class="lead-yes-note" id="leadYesNote">
+            ℹ️ 選擇「是」後，片語的備註欄會自動加註「此為社區團隊送件 LINE商機通報案」，提醒門市留意。
+        </div>
+    </div>
+
     <div class="input-group">
         <label>備註（選填）</label>
         <textarea id="extraNote" placeholder="例如：客戶指定要辦寬頻+市話" rows="3"
@@ -113,15 +128,23 @@
         <div class="section-title">預覽結果</div>
         <div class="result-box" id="phraseResult"></div>
         <button class="copy-btn" onclick="copyPhrase()">📋 複製完整片語</button>
+        <div class="save-status" id="saveStatus"></div>
     </div>
 </div>
 
 <script>
     // ── GAS API URL（與 index.html 相同）──
     const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
+    const LIFF_ID  = "2010021235-m0rWdR4i";
 
     // 從 Sheet 載入的原始資料，格式：[{ plan, speed, coupon, group, code }, ...]
     let PLAN_ROWS = [];
+
+    // 🚀 新增：登入使用者資訊（liff.getProfile）
+    let CURRENT_USER = { displayName: "未知", userId: "" };
+
+    // 🚀 新增：記住最後一次產生的片語各欄位，供複製時寫入記錄用
+    let LAST_PHRASE_DATA = null;
 
     // ── 頁面初始化 ──
     window.onload = async function() {
@@ -135,7 +158,19 @@
             document.getElementById('autoBanner').style.display = 'block';
         }
 
-        // 2. 從 GAS 載入方案資料
+        // 2. 初始化 LIFF，取得使用者身份
+        try {
+            await liff.init({ liffId: LIFF_ID });
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
+            }
+        } catch (err) {
+            console.error("LIFF init error:", err);
+            // LIFF 初始化失敗不影響其他功能，僅記錄為「未知」使用者
+        }
+
+        // 3. 從 GAS 載入方案資料
         await loadPlanData();
     };
 
@@ -232,7 +267,6 @@
         const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.group === group);
         if (!match) { clearPlanResult(); return; }
 
-        // 寫入唯讀欄位
         const couponInput = document.getElementById('planCouponCode');
         const codeInput   = document.getElementById('planCode');
         couponInput.value = match.coupon;
@@ -240,7 +274,6 @@
         couponInput.classList.add('readonly-filled');
         codeInput.classList.add('readonly-filled');
 
-        // 預覽小卡
         const preview = document.getElementById('planPreview');
         preview.style.display = 'block';
         preview.innerHTML = `
@@ -264,6 +297,12 @@
         preview.innerHTML = '';
     }
 
+    // 🚀 新增：商機通報案下拉切換提示
+    function onLineLeadChange() {
+        const isYes = document.getElementById('selLineLead').value === '是';
+        document.getElementById('leadYesNote').style.display = isYes ? 'block' : 'none';
+    }
+
     // ── 產生片語 ──
     function generatePhrase() {
         const plan       = document.getElementById('selPlan').value || "(未選)";
@@ -275,7 +314,14 @@
         const coupon     = document.getElementById('couponCode').value || "(未填)";
         const staff      = document.getElementById('staffId').value || "(未填)";
         const store      = document.getElementById('storeName').value || "(未填)";
-        const note       = document.getElementById('extraNote').value.trim();
+        const isLineLead = document.getElementById('selLineLead').value;
+        const noteRaw    = document.getElementById('extraNote').value.trim();
+
+        // 🚀 商機通報案為「是」時，自動在備註加註固定文字
+        const leadTag = "此為社區團隊送件 LINE商機通報案";
+        const note = isLineLead === '是'
+            ? (noteRaw ? `${leadTag}；${noteRaw}` : leadTag)
+            : noteRaw;
 
         const phraseHTML = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
 
@@ -297,18 +343,29 @@
 
         document.getElementById('phraseResult').innerHTML = phraseHTML;
         document.getElementById('result-area').style.display = 'block';
+        document.getElementById('saveStatus').style.display = 'none';
+        document.getElementById('saveStatus').textContent = '';
+
+        // 記住這次的結構化資料，供複製時寫入 Sheet
+        LAST_PHRASE_DATA = {
+            plan, speed, group, planCoupon, planCode,
+            commId: comm, couponCode: coupon, staffId: staff, storeName: store,
+            isLineLead, note
+        };
+
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     }
 
-    // ── 複製片語（含 fallback）──
+    // ── 複製片語（含 fallback）＋ 寫入使用記錄 ──
     function copyPhrase() {
         const text = document.getElementById('phraseResult').innerText;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(text)
-                .then(() => alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)'))
-                .catch(() => fallbackCopy(text));
+                .then(() => { alert('片語已複製到剪貼簿！\n(貼上至 LINE 時網址會自動轉為連結)'); logUsage(); })
+                .catch(() => { fallbackCopy(text); logUsage(); });
         } else {
             fallbackCopy(text);
+            logUsage();
         }
     }
 
@@ -329,6 +386,37 @@
             alert('自動複製失敗，請手動長按文字區域複製。');
         }
         document.body.removeChild(ta);
+    }
+
+    // 🚀 新增：複製成功後，將本次片語使用資訊寫入 Sheet（不阻塞 UI）
+    async function logUsage() {
+        if (!LAST_PHRASE_DATA) return;
+
+        const statusEl = document.getElementById('saveStatus');
+        statusEl.style.display = 'block';
+        statusEl.textContent = '⏳ 記錄使用資訊中...';
+
+        const payload = {
+            action: 'logPhraseUsage',
+            payload: {
+                userName: CURRENT_USER.displayName,
+                userId: CURRENT_USER.userId,
+                ...LAST_PHRASE_DATA
+            }
+        };
+
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            statusEl.textContent = data.success ? '✅ 已記錄使用資訊' : '⚠️ 記錄失敗，但不影響片語使用';
+        } catch (err) {
+            console.error("logUsage error:", err);
+            statusEl.textContent = '⚠️ 記錄失敗，但不影響片語使用';
+        }
     }
 </script>
 

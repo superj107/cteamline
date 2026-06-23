@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>村里鄰推廣案回填</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, "Helvetica Neue", sans-serif; background-color: #f0f4f3; margin: 0; padding: 15px; color: #333; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #d4537e; margin-bottom: 8px; font-size: 22px; }
+        .subtitle { text-align: center; color: #888; font-size: 13px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; font-size: 14px; color: #666; margin-bottom: 5px; font-weight: bold; }
+        label .required { color: #e53935; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; transition: border 0.3s; background: white; }
+        input:focus { border-color: #d4537e; outline: none; }
+        input.error-field { border-color: #e53935; background-color: #fff5f5; }
+        button { width: 100%; padding: 14px; background-color: #d4537e; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
+        button:active { background-color: #993556; }
+        button:disabled { background-color: #aaa; cursor: not-allowed; }
+        .user-badge { background: #f0f0f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; font-size: 13px; color: #555; display: flex; align-items: center; gap: 8px; }
+        .user-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: #1DB446; flex-shrink: 0; }
+        .field-error { color: #e53935; font-size: 12px; margin-top: 4px; display: none; }
+        #successBox { display: none; text-align: center; padding: 30px 10px; }
+        #successBox .icon { font-size: 48px; margin-bottom: 10px; }
+        #successBox h3 { color: #1DB446; margin: 10px 0; }
+        #successBox p { color: #666; font-size: 14px; line-height: 1.6; }
+        #loadingMsg { text-align: center; color: #888; font-size: 14px; padding: 8px 0; }
+        .error-msg { color: #e53935; font-size: 13px; margin-top: 6px; text-align: center; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="formContainer">
+    <h2>🏘️ 村里鄰推廣案回填</h2>
+    <p class="subtitle">請填寫以下資訊完成案件回填</p>
+
+    <div class="user-badge" id="userBadge">
+        <span class="dot"></span>
+        <span id="loadingMsg">⏳ 正在確認您的身份...</span>
+    </div>
+    <div class="error-msg" id="liffError">❌ 身份確認失敗，請重新從 LINE 開啟此頁面。</div>
+
+    <div class="input-group">
+        <label>聯單號碼 <span class="required">*</span></label>
+        <input type="text" id="ticketNo" placeholder="例如：TK2026060001">
+        <div class="field-error" id="errTicketNo">請輸入聯單號碼</div>
+    </div>
+
+    <div class="input-group">
+        <label>推薦人（簽約人） <span class="required">*</span></label>
+        <input type="text" id="referrer" placeholder="例如：王小明">
+        <div class="field-error" id="errReferrer">請輸入推薦人姓名</div>
+    </div>
+
+    <div class="input-group">
+        <label>推廣人（員工） <span class="required">*</span></label>
+        <input type="text" id="promoter" placeholder="例如：陳大華 / EMP12345">
+        <div class="field-error" id="errPromoter">請輸入推廣人姓名或員編</div>
+    </div>
+
+    <button id="submitBtn" onclick="submitForm()" disabled>✅ 送出回填</button>
+</div>
+
+<div class="container" id="successBox">
+    <div class="icon">🎉</div>
+    <h3>回填成功！</h3>
+    <p>您的村里鄰推廣案資訊已成功送出記錄。<br>感謝您的協助！</p>
+    <button onclick="resetForm()">📝 再填一筆</button>
+</div>
+
+<script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
+    const LIFF_ID  = "2010021235-m0rWdR4i";
+
+    let CURRENT_USER = { displayName: "未知", userId: "" };
+
+    window.onload = async function() {
+        const badge = document.getElementById('userBadge');
+        const liffError = document.getElementById('liffError');
+
+        try {
+            await liff.init({ liffId: LIFF_ID });
+            if (liff.isLoggedIn()) {
+                const profile = await liff.getProfile();
+                CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
+                badge.innerHTML = `<span class="dot"></span><span>目前填表人：${CURRENT_USER.displayName}</span>`;
+            } else {
+                badge.innerHTML = `<span class="dot" style="background:#aaa;"></span><span>未登入 LINE，將以「未知」身份記錄</span>`;
+            }
+        } catch (err) {
+            console.error("LIFF init error:", err);
+            liffError.style.display = 'block';
+            badge.innerHTML = `<span class="dot" style="background:#aaa;"></span><span>身份確認失敗，將以「未知」身份記錄</span>`;
+        }
+
+        document.getElementById('submitBtn').disabled = false;
+    };
+
+    function validateField(id, errId) {
+        const val = document.getElementById(id).value.trim();
+        const input = document.getElementById(id);
+        const errEl = document.getElementById(errId);
+        if (!val) {
+            input.classList.add('error-field');
+            errEl.style.display = 'block';
+            return false;
+        }
+        input.classList.remove('error-field');
+        errEl.style.display = 'none';
+        return true;
+    }
+
+    async function submitForm() {
+        const okTicket   = validateField('ticketNo', 'errTicketNo');
+        const okReferrer = validateField('referrer', 'errReferrer');
+        const okPromoter = validateField('promoter', 'errPromoter');
+
+        if (!okTicket || !okReferrer || !okPromoter) return;
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ 送出中...';
+
+        const payload = {
+            action: 'submitReportForm',
+            payload: {
+                userName: CURRENT_USER.displayName,
+                userId: CURRENT_USER.userId,
+                ticketNo: document.getElementById('ticketNo').value.trim(),
+                referrer: document.getElementById('referrer').value.trim(),
+                promoter: document.getElementById('promoter').value.trim()
+            }
+        };
+
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                document.getElementById('formContainer').style.display = 'none';
+                document.getElementById('successBox').style.display = 'block';
+            } else {
+                alert('送出失敗：' + (data.error || '未知錯誤，請稍後再試。'));
+                btn.disabled = false;
+                btn.textContent = '✅ 送出回填';
+            }
+        } catch (err) {
+            console.error("submitForm error:", err);
+            alert('連線異常，請稍後再試。');
+            btn.disabled = false;
+            btn.textContent = '✅ 送出回填';
+        }
+    }
+
+    function resetForm() {
+        document.getElementById('ticketNo').value = '';
+        document.getElementById('referrer').value = '';
+        document.getElementById('promoter').value = '';
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').textContent = '✅ 送出回填';
+        document.getElementById('successBox').style.display = 'none';
+        document.getElementById('formContainer').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
