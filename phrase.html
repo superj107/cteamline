@@ -99,6 +99,11 @@
     </div>
 
     <div class="input-group">
+        <label>推薦人姓名(村里鄰簽約)</label>
+        <input type="text" id="referrerName" placeholder="例如：王小明">
+    </div>
+
+    <div class="input-group">
         <label>前往門市名稱</label>
         <input type="text" id="storeName" placeholder="例如：新北永和門市">
     </div>
@@ -313,6 +318,7 @@
         const comm       = document.getElementById('commId').value || "(未填)";
         const coupon     = document.getElementById('couponCode').value || "(未填)";
         const staff      = document.getElementById('staffId').value || "(未填)";
+        const referrerName = document.getElementById('referrerName').value || "(未填)";
         const store      = document.getElementById('storeName').value || "(未填)";
         const isLineLead = document.getElementById('selLineLead').value;
         const noteRaw    = document.getElementById('extraNote').value.trim();
@@ -336,6 +342,7 @@
 ・社區名稱／社區識別碼：${comm}
 ・社區優惠專屬優惠序號：F000（${coupon}）
 ・推廣人員編：${staff}
+・推薦人姓名(村里鄰簽約)：${referrerName}
 ・類型：社區團隊推廣案(請門市備註)
 ・前往門市名稱：${store}${note ? '\n・備註：' + note : ''}
 
@@ -349,7 +356,7 @@
         // 記住這次的結構化資料，供複製時寫入 Sheet
         LAST_PHRASE_DATA = {
             plan, speed, group, planCoupon, planCode,
-            commId: comm, couponCode: coupon, staffId: staff, storeName: store,
+            commId: comm, couponCode: coupon, staffId: staff, referrerName, storeName: store,
             isLineLead, note
         };
 
