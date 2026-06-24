@@ -121,7 +121,7 @@
     </div>
 
     <div class="input-group">
-        <label>備註（選填）</label>
+        <label>備註(請門市協助備註)</label>
         <textarea id="extraNote" placeholder="例如：客戶指定要辦寬頻+市話" rows="3"
           style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; font-size:16px; box-sizing:border-box; resize:vertical; font-family:inherit; transition:border 0.3s;"
           onfocus="this.style.borderColor='#1DB446'" onblur="this.style.borderColor='#ddd'"></textarea>
@@ -333,11 +333,18 @@
         const isLineLead = document.getElementById('selLineLead').value;
         const noteRaw    = document.getElementById('extraNote').value.trim();
 
-        // 🚀 商機通報案為「是」時，自動在備註加註固定文字
-        const leadTag = "此為社區團隊送件 LINE商機通報案";
-        const note = isLineLead === '是'
-            ? (noteRaw ? `${leadTag}；${noteRaw}` : leadTag)
-            : noteRaw;
+        // 🚀 備註組合邏輯：依序疊加「LINE商機通報」「推薦人戶別」「使用者自填內容」
+        const noteParts = [];
+        if (isLineLead === '是') {
+            noteParts.push("此為社區團隊送件 LINE商機通報案");
+        }
+        if (referrerType) {
+            noteParts.push(referrerType);
+        }
+        if (noteRaw) {
+            noteParts.push(noteRaw);
+        }
+        const note = noteParts.join('；');
 
         const phraseHTML = `親愛的客戶您好，感謝您的申辦 🙌 為加速門市作業，請您前往辦理時，提供以下資料給門市人員，謝謝：
 
@@ -354,7 +361,7 @@
 ・推廣人員編：${staff}
 ・推薦人姓名(村里鄰簽約)：${referrerName}${referrerType ? ' (' + referrerType + ')' : ''}
 ・類型：社區團隊推廣案(請門市備註)
-・前往門市名稱：${store}${note ? '\n・備註：' + note : ''}
+・前往門市名稱：${store}${note ? '\n・備註(請門市協助備註)：' + note : ''}
 
 😊 建議可先確認門市營業時間：<a href="https://reurl.cc/N2EK5x" target="_blank" style="color: #1DB446; text-decoration: underline;">https://reurl.cc/N2EK5x</a>`;
 
