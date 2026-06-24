@@ -352,6 +352,7 @@
                 : "此為社區團隊送件"
         );
         if (referrerType) {
+            noteParts.push(`推薦人：${referrerName}`);
             noteParts.push(referrerType);
         }
         if (noteRaw) {
