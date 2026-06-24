@@ -341,11 +341,16 @@
         const isLineLead = document.getElementById('selLineLead').value;
         const noteRaw    = document.getElementById('extraNote').value.trim();
 
-        // 🚀 備註組合邏輯：依序疊加「LINE商機通報」「推薦人戶別」「使用者自填內容」
+        // 🚀 備註組合邏輯：
+        // 1. 「此為社區團隊送件」一律固定出現，不受「是否為LINE商機通報案」影響
+        // 2. 選「是」時，額外疊加「LINE商機通報案」字樣
+        // 3. 推薦人戶別、使用者自填內容依序疊加
         const noteParts = [];
-        if (isLineLead === '是') {
-            noteParts.push("此為社區團隊送件 LINE商機通報案");
-        }
+        noteParts.push(
+            isLineLead === '是'
+                ? "此為社區團隊送件 LINE商機通報案"
+                : "此為社區團隊送件"
+        );
         if (referrerType) {
             noteParts.push(referrerType);
         }
