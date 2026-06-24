@@ -166,13 +166,21 @@
         // 2. 初始化 LIFF，取得使用者身份
         try {
             await liff.init({ liffId: LIFF_ID });
-            if (liff.isLoggedIn()) {
-                const profile = await liff.getProfile();
-                CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
+
+            if (!liff.isLoggedIn()) {
+                // 🚀 修正：未登入時主動觸發登入流程，而非直接放棄
+                // liff.login() 會導向 LINE 登入頁，成功後重新導回本頁（帶原網址參數）
+                liff.login({ redirectUri: window.location.href });
+                return; // login 會重新導向，這裡先中止後續流程
             }
+
+            const profile = await liff.getProfile();
+            CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
+
         } catch (err) {
-            console.error("LIFF init error:", err);
-            // LIFF 初始化失敗不影響其他功能，僅記錄為「未知」使用者
+            console.error("LIFF init/profile error:", err);
+            // LIFF 初始化或取得個人資料失敗，記錄為「未知」使用者，不阻斷其他功能
+            CURRENT_USER = { displayName: "未知(LIFF錯誤)", userId: "" };
         }
 
         // 3. 從 GAS 載入方案資料
@@ -339,7 +347,6 @@
             noteParts.push("此為社區團隊送件 LINE商機通報案");
         }
         if (referrerType) {
-            noteParts.push(`推薦人：${referrerName}`);
             noteParts.push(referrerType);
         }
         if (noteRaw) {
