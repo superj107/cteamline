@@ -60,8 +60,15 @@
         </select>
     </div>
 
+    <div class="input-group" id="modGroup" style="display:none;">
+        <label>③ MOD種類</label>
+        <select id="selMod" onchange="onModChange()" disabled>
+            <option value="">── 請選擇MOD種類 ──</option>
+        </select>
+    </div>
+
     <div class="input-group">
-        <label>③ 社區分群</label>
+        <label id="groupLabel">④ 社區分群</label>
         <select id="selGroup" onchange="onGroupChange()" disabled>
             <option value="">── 請先選速率 ──</option>
         </select>
@@ -229,11 +236,16 @@
     function onPlanChange() {
         const plan = document.getElementById('selPlan').value;
         const selSpeed = document.getElementById('selSpeed');
+        const selMod = document.getElementById('selMod');
         const selGroup = document.getElementById('selGroup');
+        const modGroup = document.getElementById('modGroup');
 
         selSpeed.innerHTML = '<option value="">── 請選擇速率 ──</option>';
+        selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
         selGroup.innerHTML = '<option value="">── 請先選速率 ──</option>';
+        selMod.disabled = true;
         selGroup.disabled = true;
+        modGroup.style.display = 'none';
         clearPlanResult();
 
         if (!plan) { selSpeed.disabled = true; return; }
@@ -252,15 +264,65 @@
     function onSpeedChange() {
         const plan  = document.getElementById('selPlan').value;
         const speed = document.getElementById('selSpeed').value;
+        const selMod = document.getElementById('selMod');
         const selGroup = document.getElementById('selGroup');
+        const modGroup = document.getElementById('modGroup');
+        const groupLabel = document.getElementById('groupLabel');
 
+        selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
         selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
+        selGroup.disabled = true;
         clearPlanResult();
 
-        if (!speed) { selGroup.disabled = true; return; }
+        if (!speed) { modGroup.style.display = 'none'; return; }
+
+        // 🚀 檢查此 方案別+速率 組合下，是否存在任何非空的 MOD 種類
+        const matchedRows = PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
+        const modOptions = [...new Set(matchedRows.map(r => r.mod).filter(m => m !== ""))];
+
+        if (modOptions.length > 0) {
+            // 有 MOD 選項：顯示 MOD 下拉，社區分群要等選完 MOD 才能建立
+            modGroup.style.display = 'block';
+            modOptions.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = m;
+                selMod.appendChild(opt);
+            });
+            selMod.disabled = false;
+            groupLabel.textContent = '④ 社區分群';
+            selGroup.innerHTML = '<option value="">── 請先選MOD種類 ──</option>';
+        } else {
+            // 無 MOD 選項：跳過這一層，直接用空字串比對建立社區分群選單
+            modGroup.style.display = 'none';
+            selMod.disabled = true;
+            groupLabel.textContent = '③ 社區分群';
+            buildGroupOptions(plan, speed, "");
+        }
+    }
+
+    // 🚀 新增：MOD種類選擇後，建立社區分群選單
+    function onModChange() {
+        const plan  = document.getElementById('selPlan').value;
+        const speed = document.getElementById('selSpeed').value;
+        const mod   = document.getElementById('selMod').value;
+
+        clearPlanResult();
+
+        if (!mod) {
+            document.getElementById('selGroup').innerHTML = '<option value="">── 請先選MOD種類 ──</option>';
+            document.getElementById('selGroup').disabled = true;
+            return;
+        }
+        buildGroupOptions(plan, speed, mod);
+    }
+
+    // 🚀 新增：共用函式，依 plan+speed+mod 建立社區分群下拉選單
+    function buildGroupOptions(plan, speed, mod) {
+        const selGroup = document.getElementById('selGroup');
+        selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
 
         const groups = [...new Set(
-            PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed).map(r => r.group)
+            PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod).map(r => r.group)
         )];
         groups.forEach(g => {
             const opt = document.createElement('option');
@@ -273,11 +335,12 @@
     function onGroupChange() {
         const plan  = document.getElementById('selPlan').value;
         const speed = document.getElementById('selSpeed').value;
+        const mod   = document.getElementById('selMod').disabled ? "" : document.getElementById('selMod').value;
         const group = document.getElementById('selGroup').value;
 
         if (!group) { clearPlanResult(); return; }
 
-        const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.group === group);
+        const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.mod === mod && r.group === group);
         if (!match) { clearPlanResult(); return; }
 
         const couponInput = document.getElementById('planCouponCode');
@@ -293,6 +356,7 @@
             📋 方案確認<br>
             ・方案別：<span>${plan}</span><br>
             ・速率：<span>${speed}</span><br>
+            ${mod ? '・MOD種類：<span>' + mod + '</span><br>' : ''}
             ・分群：<span>${group}</span><br>
             ・社區優惠碼：<span>${match.coupon}</span><br>
             ・方案代碼：<span>${match.code}</span>
@@ -329,6 +393,8 @@
     function generatePhrase() {
         const plan       = document.getElementById('selPlan').value || "(未選)";
         const speed      = document.getElementById('selSpeed').value || "(未選)";
+        const modSelect  = document.getElementById('selMod');
+        const mod        = modSelect.disabled ? "" : modSelect.value; // 無MOD選項時視為空字串，不顯示在片語
         const group      = document.getElementById('selGroup').value || "(未選)";
         const planCoupon = document.getElementById('planCouponCode').value || "(未填)";
         const planCode   = document.getElementById('planCode').value || "(未填)";
@@ -367,7 +433,7 @@
 ・請攜帶身分證及第二證件（如健保卡或駕照）
 
 📌 申辦資訊
-・申辦內容：${plan} ${speed}
+・申辦內容：${plan} ${speed}${mod ? '\n・MOD種類：' + mod : ''}
 ・社區分群：${group}
 ・社區優惠碼：${planCoupon}
 ・方案代碼：${planCode}
@@ -387,7 +453,7 @@
 
         // 記住這次的結構化資料，供複製時寫入 Sheet
         LAST_PHRASE_DATA = {
-            plan, speed, group, planCoupon, planCode,
+            plan, speed, mod, group, planCoupon, planCode,
             commId: comm, couponCode: coupon, staffId: staff, referrerName, referrerType, storeName: store,
             isLineLead, note
         };
