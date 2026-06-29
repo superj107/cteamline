@@ -47,28 +47,28 @@
     <div class="error-msg" id="loadError">❌ 方案資料載入失敗，請重新整理頁面。</div>
 
     <div class="input-group">
-        <label>① 方案別</label>
+        <label>方案別</label>
         <select id="selPlan" onchange="onPlanChange()" disabled>
             <option value="">── 載入中 ──</option>
         </select>
     </div>
 
-    <div class="input-group">
-        <label>② 新租速率</label>
+    <div class="input-group" id="speedGroup">
+        <label>新租速率</label>
         <select id="selSpeed" onchange="onSpeedChange()" disabled>
             <option value="">── 請先選方案別 ──</option>
         </select>
     </div>
 
     <div class="input-group" id="modGroup" style="display:none;">
-        <label>③ MOD種類</label>
+        <label>MOD種類</label>
         <select id="selMod" onchange="onModChange()" disabled>
             <option value="">── 請選擇MOD種類 ──</option>
         </select>
     </div>
 
     <div class="input-group">
-        <label id="groupLabel">④ 社區分群</label>
+        <label id="groupLabel">社區分群</label>
         <select id="selGroup" onchange="onGroupChange()" disabled>
             <option value="">── 請先選速率 ──</option>
         </select>
@@ -239,6 +239,7 @@
         const selMod = document.getElementById('selMod');
         const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
+        const speedGroup = document.getElementById('speedGroup');
 
         selSpeed.innerHTML = '<option value="">── 請選擇速率 ──</option>';
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
@@ -246,6 +247,7 @@
         selMod.disabled = true;
         selGroup.disabled = true;
         modGroup.style.display = 'none';
+        speedGroup.style.display = 'block';
         clearPlanResult();
 
         if (!plan) { selSpeed.disabled = true; return; }
@@ -253,6 +255,18 @@
         const speeds = [...new Set(
             PLAN_ROWS.filter(r => r.plan === plan).map(r => r.speed)
         )];
+
+        // 🚀 若此方案別底下「所有」速率都是空字串（例如「無上網MOD」），
+        // 代表這個方案別本來就沒有速率概念，跳過速率層，直接往下判斷MOD層。
+        const hasRealSpeed = speeds.some(s => s !== "");
+
+        if (!hasRealSpeed) {
+            speedGroup.style.display = 'none';
+            selSpeed.disabled = true;
+            proceedAfterSpeed(plan, "");
+            return;
+        }
+
         speeds.forEach(s => {
             const opt = document.createElement('option');
             opt.value = opt.textContent = s;
@@ -264,6 +278,18 @@
     function onSpeedChange() {
         const plan  = document.getElementById('selPlan').value;
         const speed = document.getElementById('selSpeed').value;
+        clearPlanResult();
+
+        if (!speed) {
+            document.getElementById('modGroup').style.display = 'none';
+            return;
+        }
+        proceedAfterSpeed(plan, speed);
+    }
+
+    // 🚀 新增：共用邏輯，速率確定後（不論是使用者選的，還是因無速率而自動帶入空字串），
+    // 判斷此 方案別+速率 組合下是否有 MOD 選項，決定顯示 MOD 下拉或直接跳到社區分群。
+    function proceedAfterSpeed(plan, speed) {
         const selMod = document.getElementById('selMod');
         const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
@@ -272,11 +298,7 @@
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
         selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
         selGroup.disabled = true;
-        clearPlanResult();
 
-        if (!speed) { modGroup.style.display = 'none'; return; }
-
-        // 🚀 檢查此 方案別+速率 組合下，是否存在任何非空的 MOD 種類
         const matchedRows = PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
         const modOptions = [...new Set(matchedRows.map(r => r.mod).filter(m => m !== ""))];
 
@@ -289,21 +311,21 @@
                 selMod.appendChild(opt);
             });
             selMod.disabled = false;
-            groupLabel.textContent = '④ 社區分群';
+            groupLabel.textContent = '社區分群';
             selGroup.innerHTML = '<option value="">── 請先選MOD種類 ──</option>';
         } else {
             // 無 MOD 選項：跳過這一層，直接用空字串比對建立社區分群選單
             modGroup.style.display = 'none';
             selMod.disabled = true;
-            groupLabel.textContent = '③ 社區分群';
+            groupLabel.textContent = '社區分群';
             buildGroupOptions(plan, speed, "");
         }
     }
 
-    // 🚀 新增：MOD種類選擇後，建立社區分群選單
+    // MOD種類選擇後，建立社區分群選單
     function onModChange() {
         const plan  = document.getElementById('selPlan').value;
-        const speed = document.getElementById('selSpeed').value;
+        const speed = document.getElementById('selSpeed').disabled ? "" : document.getElementById('selSpeed').value;
         const mod   = document.getElementById('selMod').value;
 
         clearPlanResult();
@@ -316,7 +338,7 @@
         buildGroupOptions(plan, speed, mod);
     }
 
-    // 🚀 新增：共用函式，依 plan+speed+mod 建立社區分群下拉選單
+    // 共用函式，依 plan+speed+mod 建立社區分群下拉選單
     function buildGroupOptions(plan, speed, mod) {
         const selGroup = document.getElementById('selGroup');
         selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
@@ -334,7 +356,7 @@
 
     function onGroupChange() {
         const plan  = document.getElementById('selPlan').value;
-        const speed = document.getElementById('selSpeed').value;
+        const speed = document.getElementById('selSpeed').disabled ? "" : document.getElementById('selSpeed').value;
         const mod   = document.getElementById('selMod').disabled ? "" : document.getElementById('selMod').value;
         const group = document.getElementById('selGroup').value;
 
@@ -355,7 +377,7 @@
         preview.innerHTML = `
             📋 方案確認<br>
             ・方案別：<span>${plan}</span><br>
-            ・速率：<span>${speed}</span><br>
+            ${speed ? '・速率：<span>' + speed + '</span><br>' : ''}
             ${mod ? '・MOD種類：<span>' + mod + '</span><br>' : ''}
             ・分群：<span>${group}</span><br>
             ・社區優惠碼：<span>${match.coupon}</span><br>
@@ -392,7 +414,8 @@
     // ── 產生片語 ──
     function generatePhrase() {
         const plan       = document.getElementById('selPlan').value || "(未選)";
-        const speed      = document.getElementById('selSpeed').value || "(未選)";
+        const speedSelect = document.getElementById('selSpeed');
+        const speed       = speedSelect.disabled ? "" : speedSelect.value; // 無速率選項時視為空字串，不顯示在片語
         const modSelect  = document.getElementById('selMod');
         const mod        = modSelect.disabled ? "" : modSelect.value; // 無MOD選項時視為空字串，不顯示在片語
         const group      = document.getElementById('selGroup').value || "(未選)";
@@ -433,7 +456,7 @@
 ・請攜帶身分證及第二證件（如健保卡或駕照）
 
 📌 申辦資訊
-・申辦內容：${plan} ${speed}${mod ? '\n・MOD種類：' + mod : ''}
+・申辦內容：${plan}${speed ? ' ' + speed : ''}${mod ? '\n・MOD種類：' + mod : ''}
 ・社區分群：${group}
 ・社區優惠碼：${planCoupon}
 ・方案代碼：${planCode}
