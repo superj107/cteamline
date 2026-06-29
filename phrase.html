@@ -67,7 +67,7 @@
         </select>
     </div>
 
-    <div class="input-group">
+    <div class="input-group" id="groupGroupWrapper">
         <label id="groupLabel">社區分群</label>
         <select id="selGroup" onchange="onGroupChange()" disabled>
             <option value="">── 請先選速率 ──</option>
@@ -240,6 +240,7 @@
         const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
         const speedGroup = document.getElementById('speedGroup');
+        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
 
         selSpeed.innerHTML = '<option value="">── 請選擇速率 ──</option>';
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
@@ -248,6 +249,7 @@
         selGroup.disabled = true;
         modGroup.style.display = 'none';
         speedGroup.style.display = 'block';
+        groupGroupWrapper.style.display = 'block';
         clearPlanResult();
 
         if (!plan) { selSpeed.disabled = true; return; }
@@ -294,10 +296,12 @@
         const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
         const groupLabel = document.getElementById('groupLabel');
+        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
 
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
         selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
         selGroup.disabled = true;
+        groupGroupWrapper.style.display = 'block'; // 重置為可見，實際是否隱藏交由 buildGroupOptions 判斷
 
         const matchedRows = PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
         const modOptions = [...new Set(matchedRows.map(r => r.mod).filter(m => m !== ""))];
@@ -338,14 +342,29 @@
         buildGroupOptions(plan, speed, mod);
     }
 
-    // 共用函式，依 plan+speed+mod 建立社區分群下拉選單
+    // 共用函式，依 plan+speed+mod 建立社區分群下拉選單；若分群選項全為空字串則自動跳過
     function buildGroupOptions(plan, speed, mod) {
         const selGroup = document.getElementById('selGroup');
+        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
+
         selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
+        groupGroupWrapper.style.display = 'block';
 
         const groups = [...new Set(
             PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod).map(r => r.group)
         )];
+
+        // 🚀 若此組合下「所有」分群都是空字串（例如部分「無上網MOD」項目），
+        // 代表這個組合本來就沒有分群概念，跳過這一層，直接完成選擇。
+        const hasRealGroup = groups.some(g => g !== "");
+
+        if (!hasRealGroup) {
+            groupGroupWrapper.style.display = 'none';
+            selGroup.disabled = true;
+            finalizeSelection(plan, speed, mod, "");
+            return;
+        }
+
         groups.forEach(g => {
             const opt = document.createElement('option');
             opt.value = opt.textContent = g;
@@ -361,7 +380,12 @@
         const group = document.getElementById('selGroup').value;
 
         if (!group) { clearPlanResult(); return; }
+        finalizeSelection(plan, speed, mod, group);
+    }
 
+    // 🚀 新增：共用邏輯，不論社區分群是使用者選的、還是因無分群概念而自動帶入空字串，
+    // 都用這個函式比對出最終的社區優惠碼/方案代碼，並顯示確認小卡。
+    function finalizeSelection(plan, speed, mod, group) {
         const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.mod === mod && r.group === group);
         if (!match) { clearPlanResult(); return; }
 
@@ -379,7 +403,7 @@
             ・方案別：<span>${plan}</span><br>
             ${speed ? '・速率：<span>' + speed + '</span><br>' : ''}
             ${mod ? '・MOD種類：<span>' + mod + '</span><br>' : ''}
-            ・分群：<span>${group}</span><br>
+            ${group ? '・分群：<span>' + group + '</span><br>' : ''}
             ・社區優惠碼：<span>${match.coupon}</span><br>
             ・方案代碼：<span>${match.code}</span>
         `;
@@ -418,7 +442,8 @@
         const speed       = speedSelect.disabled ? "" : speedSelect.value; // 無速率選項時視為空字串，不顯示在片語
         const modSelect  = document.getElementById('selMod');
         const mod        = modSelect.disabled ? "" : modSelect.value; // 無MOD選項時視為空字串，不顯示在片語
-        const group      = document.getElementById('selGroup').value || "(未選)";
+        const groupSelect = document.getElementById('selGroup');
+        const group       = groupSelect.disabled ? "" : groupSelect.value; // 無分群選項時視為空字串，不顯示在片語
         const planCoupon = document.getElementById('planCouponCode').value || "(未填)";
         const planCode   = document.getElementById('planCode').value || "(未填)";
         const comm       = document.getElementById('commId').value || "(未填)";
@@ -456,8 +481,7 @@
 ・請攜帶身分證及第二證件（如健保卡或駕照）
 
 📌 申辦資訊
-・申辦內容：${plan}${speed ? ' ' + speed : ''}${mod ? '\n・MOD種類：' + mod : ''}
-・社區分群：${group}
+・申辦內容：${plan}${speed ? ' ' + speed : ''}${mod ? '\n・MOD種類：' + mod : ''}${group ? '\n・社區分群：' + group : ''}
 ・社區優惠碼：${planCoupon}
 ・方案代碼：${planCode}
 ・社區名稱／社區識別碼：${comm}
