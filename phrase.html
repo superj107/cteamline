@@ -92,7 +92,7 @@
 
     <div class="input-group">
         <label>社區名稱／識別碼</label>
-        <input type="text" id="commId" placeholder="例如：幸福社區 / C001">
+        <input type="text" id="commId" placeholder="例如：幸福社區 / SH0001">
     </div>
 
     <div class="input-group">
@@ -482,9 +482,10 @@
 
 📌 申辦資訊
 ・申辦內容：${plan}${speed ? ' ' + speed : ''}${mod ? '\n・MOD種類：' + mod : ''}${group ? '\n・社區分群：' + group : ''}
+・受理Step1: 社區名稱／社區識別碼：${comm}
+
 ・社區優惠碼：${planCoupon}
 ・方案代碼：${planCode}
-・社區名稱／社區識別碼：${comm}
 ・社區優惠專屬優惠序號：F000（${coupon}）
 ・推廣人員編：${staff}
 ・推薦人姓名(村里鄰簽約)：${referrerName}${referrerType ? ' (' + referrerType + ')' : ''}
