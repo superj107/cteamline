@@ -111,18 +111,6 @@
               </button>
     </div>
 
-          function copyText(text, btn) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText(text)
-                .then(() => {
-                  btn.textContent = '✅ 已複製';
-                  setTimeout(() => btn.textContent = '📋 複製', 1500);
-                })
-                .catch(() => fallbackCopyText(text, btn));
-            } else {
-              fallbackCopyText(text, btn);
-            }
-          }
 
           function fallbackCopyText(text, btn) {
             const ta = document.createElement('textarea');
