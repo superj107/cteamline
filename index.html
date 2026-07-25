@@ -108,12 +108,7 @@
               <button onclick="copyText('${item.name}／${item.code}', this)"
                 style="padding:6px 12px; background:#1DB446; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; flex-shrink:0;">
                 📋 複製
-              </button>
-
-    
-
-
-   
+              </button>   
               <div class="item-detail">
                 📍 地址：${item.address}<br>
                 👥 社區分群：<span class="highlight">${item.group || "無"}</span><br>
@@ -121,8 +116,7 @@
                 🏢 所屬單位：<span class="highlight">${item.unit}</span>
               </div>
             </div>`;
-        });
-        
+        });            
         resDiv.innerHTML = htmlContent;
         
       } catch (err) {
@@ -130,6 +124,37 @@
         resDiv.innerHTML = "<p style='text-align:center; color: red;'>搜尋發生錯誤，請稍後再試</p>";
       }
     }
+
+    function copyText(text, btn) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            btn.textContent = '✅ 已複製';
+            setTimeout(() => btn.textContent = '📋 複製', 1500);
+          })
+          .catch(() => fallbackCopyText(text, btn));
+      } else {
+        fallbackCopyText(text, btn);
+      }
+    }
+    
+    function fallbackCopyText(text, btn) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        btn.textContent = '✅ 已複製';
+        setTimeout(() => btn.textContent = '📋 複製', 1500);
+      } catch(e) {
+        alert('複製失敗，請手動複製');
+      }
+      document.body.removeChild(ta);
+      }
   </script>
 </body>
 </html>
