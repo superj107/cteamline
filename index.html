@@ -14,12 +14,15 @@
     input:focus { border-color: #1DB446; outline: none; }
     button { background: #1DB446; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 5px; }
     button:active { background: #158f37; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     #loader { text-align: center; color: #888; padding: 20px; }
+    
+    /* 搜尋結果列表樣式 */
     .item { background: #fff; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-    .item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-    .item-name { color: #1DB446; font-size: 18px; font-weight: bold; }
-    .item-code { color: #e91e63; font-weight: bold; font-size: 20px; }
-    .item-detail { font-size: 14px; color: #555; line-height: 1.6; }
+    .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
+    .item-name { color: #1DB446; font-size: 17px; font-weight: bold; word-break: break-all; }
+    .copy-btn { padding: 6px 12px; background: #1DB446; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; flex-shrink: 0; width: auto; margin: 0; }
+    .item-detail { font-size: 14px; color: #555; line-height: 1.6; border-top: 1px dashed #eee; padding-top: 8px; }
     .highlight { color: #2c3e50; font-weight: 600; }
   </style>
 </head>
@@ -29,10 +32,10 @@
     <div id="loader">正在連線至資料庫...</div>
     
     <div id="main-ui" style="display:none;">
-      <label>選擇行政區</label>
+      <label for="distSelect">選擇行政區</label>
       <select id="distSelect"></select>
       
-      <label>關鍵字 (路名或社區名)</label>
+      <label for="keyword">關鍵字 (路名或社區名)</label>
       <input type="text" id="keyword" placeholder="例如：中山路 或 幸福社區">
       
       <button id="searchBtn" onclick="handleSearch()">立即搜尋</button>
@@ -42,10 +45,14 @@
   </div>
 
   <script>
-    // 🚀 請確認此 URL 與你最新部署的 GAS Web App URL 一致
     const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
 
     window.onload = function() {
+      // 支援鍵盤 Enter 鍵觸發搜尋
+      document.getElementById('keyword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') handleSearch();
+      });
+
       // 初始化 LIFF
       liff.init({ liffId: "2010021235-m0rWdR4i" }).then(() => {
         initData();
@@ -83,8 +90,10 @@
       const dist = document.getElementById('distSelect').value;
       const kw = document.getElementById('keyword').value;
       const resDiv = document.getElementById('results');
+      const searchBtn = document.getElementById('searchBtn');
       
       resDiv.innerHTML = "<p style='text-align:center; color: #888;'>🔍 搜尋中...</p>";
+      searchBtn.disabled = true;
 
       try {
         const response = await fetch(`${API_URL}?action=query&dist=${encodeURIComponent(dist)}&kw=${encodeURIComponent(kw)}`, {
@@ -98,40 +107,39 @@
           return;
         }
 
-        // 效能優化：先組成 HTML 字串再一次寫入
+        // 組成 HTML 字串 (已修正 <div> 閉合與排版層級)
         let htmlContent = "";
         data.forEach(item => {
+          const copyContent = `${item.name}／${item.code}`;
           htmlContent += `
             <div class="item">
-            <div class="item-header">
-              <span class="item-name">${item.name}／${item.code}</span>
-              <button onclick="copyText('${item.name}／${item.code}', this)"
-                style="padding:6px 12px; background:#1DB446; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; flex-shrink:0;">
-                📋 複製
-              </button>   
+              <div class="item-header">
+                <span class="item-name">${item.name}／${item.code}</span>
+                <button class="copy-btn" onclick="copyText('${copyContent}', this)">📋 複製</button>
+              </div>
               <div class="item-detail">
-                📍 地址：${item.address}<br>
+                📍 地址：${item.address || "無"}<br>
                 👥 社區分群：<span class="highlight">${item.group || "無"}</span><br>
-                👤 認養人：<span class="highlight">${item.adopter}</span><br>
-                🏢 所屬單位：<span class="highlight">${item.unit}</span>
+                👤 認養人：<span class="highlight">${item.adopter || "無"}</span><br>
+                🏢 所屬單位：<span class="highlight">${item.unit || "無"}</span>
               </div>
             </div>`;
-        });            
+        });         
         resDiv.innerHTML = htmlContent;
         
       } catch (err) {
         console.error(err);
         resDiv.innerHTML = "<p style='text-align:center; color: red;'>搜尋發生錯誤，請稍後再試</p>";
+      } finally {
+        searchBtn.disabled = false;
       }
     }
 
+    // 複製文字功能
     function copyText(text, btn) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text)
-          .then(() => {
-            btn.textContent = '✅ 已複製';
-            setTimeout(() => btn.textContent = '📋 複製', 1500);
-          })
+          .then(() => showCopySuccess(btn))
           .catch(() => fallbackCopyText(text, btn));
       } else {
         fallbackCopyText(text, btn);
@@ -148,13 +156,17 @@
       ta.select();
       try {
         document.execCommand('copy');
-        btn.textContent = '✅ 已複製';
-        setTimeout(() => btn.textContent = '📋 複製', 1500);
+        showCopySuccess(btn);
       } catch(e) {
         alert('複製失敗，請手動複製');
       }
       document.body.removeChild(ta);
-      }
+    }
+
+    function showCopySuccess(btn) {
+      btn.textContent = '✅ 已複製';
+      setTimeout(() => btn.textContent = '📋 複製', 1500);
+    }
   </script>
 </body>
 </html>
