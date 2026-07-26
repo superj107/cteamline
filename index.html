@@ -173,7 +173,11 @@
 
     function openMap(lat, lng) {
       const url = `https://www.google.com/maps?q=${lat},${lng}`;
-      window.open(url, "_blank");
+      if (typeof liff !== "undefined" && liff.isInClient && liff.isInClient()) {
+        liff.openWindow({ url: url, external: true });
+      } else {
+        window.open(url, "_blank");
+      }
     }
 
     function showCopySuccess(btn) {
