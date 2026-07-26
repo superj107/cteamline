@@ -22,6 +22,7 @@
     .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
     .item-name { color: #1DB446; font-size: 17px; font-weight: bold; word-break: break-all; }
     .copy-btn { padding: 6px 12px; background: #1DB446; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; flex-shrink: 0; width: auto; margin: 0; }
+    .map-btn { padding: 6px 12px; background: #4285F4; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; width: auto; margin: 0; }
     .item-detail { font-size: 14px; color: #555; line-height: 1.6; border-top: 1px dashed #eee; padding-top: 8px; }
     .highlight { color: #2c3e50; font-weight: 600; }
   </style>
@@ -168,6 +169,11 @@
         alert('複製失敗，請手動複製');
       }
       document.body.removeChild(ta);
+    }
+
+    function openMap(lat, lng) {
+      const url = `https://www.google.com/maps?q=${lat},${lng}`;
+      window.open(url, "_blank");
     }
 
     function showCopySuccess(btn) {
