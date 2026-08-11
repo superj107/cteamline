@@ -429,6 +429,11 @@
     // 🚀 新增：企業戶名單（推薦人欄位包含以下任一關鍵字，視為企業戶）
     const ENTERPRISE_KEYWORDS = ["世霖科技", "陳盈君"];
 
+    // 🚀 新增：依「方案別」名稱判斷優惠序號前綴（含 POC 字樣→F00C，否則→F000）
+    function getCouponPrefix(planName) {
+        return (planName && planName.includes("POC")) ? "F00C" : "F000";
+
+
     function getReferrerTypeTag(referrerNameValue) {
         if (!referrerNameValue) return "";
         const isEnterprise = ENTERPRISE_KEYWORDS.some(kw => referrerNameValue.includes(kw));
@@ -438,6 +443,7 @@
     // ── 產生片語 ──
     function generatePhrase() {
         const plan       = document.getElementById('selPlan').value || "(未選)";
+        const couponPrefix = getCouponPrefix(plan);
         const speedSelect = document.getElementById('selSpeed');
         const speed       = speedSelect.disabled ? "" : speedSelect.value; // 無速率選項時視為空字串，不顯示在片語
         const modSelect  = document.getElementById('selMod');
@@ -489,7 +495,7 @@
 ・申辦內容：${plan}${speed ? ' ' + speed : ''}${mod ? '\n・MOD種類：' + mod : ''}${group ? '\n・社區分群：' + group : ''}
 ・社區優惠碼：${planCoupon}
 ・方案代碼：${planCode}
-・社區優惠專屬優惠序號：F000（${coupon}）
+・社區優惠專屬優惠序號：${couponPrefix}（${coupon}）
 ・推廣人員編：${staff}
 ・推薦人姓名(村里鄰簽約)：${referrerName}${referrerType ? ' (' + referrerType + ')' : ''}
 ・類型：社區團隊推廣案(請門市備註)
