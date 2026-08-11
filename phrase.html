@@ -160,38 +160,18 @@
 
     // ── 頁面初始化 ──
     window.onload = async function() {
-        // 1. URL 帶入序號
-        const params = new URLSearchParams(window.location.search);
-        const coupon = params.get('coupon');
-        if (coupon) {
-            const input = document.getElementById('couponCode');
-            input.value = coupon;
-            input.classList.add('auto-filled');
-            document.getElementById('autoBanner').style.display = 'block';
-        }
+    const params = new URLSearchParams(window.location.search);
+    const coupon = params.get('coupon');
+    if (coupon) {
+        const input = document.getElementById('couponCode');
+        input.value = coupon;
+        input.classList.add('auto-filled');
+        document.getElementById('autoBanner').style.display = 'block';
+    }
 
-        // 2. 初始化 LIFF，取得使用者身份
-        try {
-            await liff.init({ liffId: LIFF_ID });
+    await loadPlanData();
 
-            if (!liff.isLoggedIn()) {
-                // 🚀 修正：未登入時主動觸發登入流程，而非直接放棄
-                // liff.login() 會導向 LINE 登入頁，成功後重新導回本頁（帶原網址參數）
-                liff.login({ redirectUri: window.location.href });
-                return; // login 會重新導向，這裡先中止後續流程
-            }
-
-            const profile = await liff.getProfile();
-            CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
-
-        } catch (err) {
-            console.error("LIFF init/profile error:", err);
-            // LIFF 初始化或取得個人資料失敗，記錄為「未知」使用者，不阻斷其他功能
-            CURRENT_USER = { displayName: "未知(LIFF錯誤)", userId: "" };
-        }
-
-        // 3. 從 GAS 載入方案資料
-        await loadPlanData();
+    // 暫時停用 LIFF，先確認方案下拉能否正常出現
     };
 
     async function loadPlanData() {
