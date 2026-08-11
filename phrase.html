@@ -159,19 +159,41 @@
     let LAST_PHRASE_DATA = null;
 
     // ── 頁面初始化 ──
+    // 🚀 調整：方案資料載入(loadPlanData)與 LIFF 身份驗證改為「並行」而非「序列」，
+    // 避免 LIFF 登入卡住/失敗時，連帶讓方案下拉選單也一直停在「載入中」。
+    // 方案資料載入不需要使用者身份，只有「複製後寫入使用記錄」才需要 CURRENT_USER。
     window.onload = async function() {
-    const params = new URLSearchParams(window.location.search);
-    const coupon = params.get('coupon');
-    if (coupon) {
-        const input = document.getElementById('couponCode');
-        input.value = coupon;
-        input.classList.add('auto-filled');
-        document.getElementById('autoBanner').style.display = 'block';
-    }
+        // 1. URL 帶入序號
+        const params = new URLSearchParams(window.location.search);
+        const coupon = params.get('coupon');
+        if (coupon) {
+            const input = document.getElementById('couponCode');
+            input.value = coupon;
+            input.classList.add('auto-filled');
+            document.getElementById('autoBanner').style.display = 'block';
+        }
 
-    await loadPlanData();
+        // 2. 從 GAS 載入方案資料 —— 不等待 LIFF，直接開始
+        loadPlanData();
 
-    // 暫時停用 LIFF，先確認方案下拉能否正常出現
+        // 3. 初始化 LIFF，取得使用者身份 —— 獨立進行，不阻擋方案下拉
+        try {
+            await liff.init({ liffId: LIFF_ID });
+
+            if (!liff.isLoggedIn()) {
+                // liff.login() 會導向 LINE 登入頁，成功後重新導回本頁（帶原網址參數）
+                liff.login({ redirectUri: window.location.href });
+                return; // login 會重新導向，這裡先中止，不影響已經在跑的 loadPlanData()
+            }
+
+            const profile = await liff.getProfile();
+            CURRENT_USER = { displayName: profile.displayName || "未知", userId: profile.userId || "" };
+
+        } catch (err) {
+            console.error("LIFF init/profile error:", err);
+            // LIFF 初始化或取得個人資料失敗，記錄為「未知」使用者，不阻斷其他功能
+            CURRENT_USER = { displayName: "未知(LIFF錯誤)", userId: "" };
+        }
     };
 
     async function loadPlanData() {
@@ -410,9 +432,10 @@
     const ENTERPRISE_KEYWORDS = ["世霖科技", "陳盈君"];
 
     // 🚀 新增：依「方案別」名稱判斷優惠序號前綴（含 POC 字樣→F00C，否則→F000）
+    // 修正：先前版本此函式漏了結尾的 }，導致整個 <script> 語法錯誤、全部功能卡死
     function getCouponPrefix(planName) {
         return (planName && planName.includes("POC")) ? "F00C" : "F000";
-
+    }
 
     function getReferrerTypeTag(referrerNameValue) {
         if (!referrerNameValue) return "";
