@@ -16,6 +16,7 @@
         input.auto-filled { border-color: #1DB446; background-color: #f0fff4; }
         input.readonly-filled { border-color: #1DB446; background-color: #f0fff4; color: #1DB446; font-weight: bold; }
         select:disabled { background-color: #f5f5f5; color: #aaa; cursor: not-allowed; }
+        input:disabled { background-color: #f5f5f5; color: #aaa; cursor: not-allowed; }
         button { width: 100%; padding: 14px; background-color: #1DB446; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
         button:active { background-color: #158f37; }
         button:disabled { background-color: #aaa; cursor: not-allowed; }
@@ -30,6 +31,8 @@
         .error-msg { color: #e53935; font-size: 13px; margin-top: 6px; display: none; }
         .lead-yes-note { background: #fff8e1; border: 1px solid #f0a500; border-radius: 8px; padding: 10px 14px; margin-top: 8px; font-size: 13px; color: #8a6d00; display: none; }
         .save-status { text-align: center; font-size: 13px; color: #888; margin-top: 8px; display: none; }
+        /* 🚀 新增：社區代碼查詢狀態提示 */
+        #commHint { font-size: 13px; margin-top: 6px; display: none; }
     </style>
 </head>
 <body>
@@ -41,6 +44,18 @@
         ✅ 優惠序號已自動帶入，請填寫其他資訊後按下合併。
     </div>
 
+    <!-- 🚀 新增：社區代碼（最上方，先填這裡才會開放下方方案選擇）── -->
+    <div class="section-title">社區代碼</div>
+    <div class="input-group">
+        <label>社區代碼</label>
+        <input type="text" id="commCode" placeholder="例如：SH00050" autocomplete="off">
+        <div id="commHint"></div>
+    </div>
+    <div class="input-group">
+        <label>社區名稱（自動帶入，唯讀）</label>
+        <input type="text" id="commName" readonly placeholder="輸入正確的社區代碼後自動帶出">
+    </div>
+
     <!-- ── 方案選擇（連動，資料從 Sheet 載入）── -->
     <div class="section-title">方案選擇</div>
     <div id="loadingMsg">⏳ 載入方案資料中...</div>
@@ -49,7 +64,7 @@
     <div class="input-group">
         <label>方案別</label>
         <select id="selPlan" onchange="onPlanChange()" disabled>
-            <option value="">── 載入中 ──</option>
+            <option value="">── 請先輸入社區代碼 ──</option>
         </select>
     </div>
 
@@ -88,11 +103,6 @@
     <div class="input-group">
         <label>方案代碼（自動帶入）</label>
         <input type="text" id="planCode" readonly placeholder="選完方案後自動填入">
-    </div>
-
-    <div class="input-group">
-        <label>社區名稱／識別碼</label>
-        <input type="text" id="commId" placeholder="例如：幸福社區 / SH0001">
     </div>
 
     <div class="input-group">
@@ -149,8 +159,23 @@
     const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
     const LIFF_ID  = "2010021235-m0rWdR4i";
 
-    // 從 Sheet 載入的原始資料，格式：[{ plan, speed, coupon, group, code }, ...]
+    // 從 Sheet 載入的原始資料，格式：[{ plan, speed, mod, coupon, group, code, competing }, ...]
     let PLAN_ROWS = [];
+    // 🚀 新增：依「是否為競爭社區」過濾後、實際餵給下拉選單使用的資料（每次社區代碼狀態改變都要重算）
+    let VISIBLE_PLAN_ROWS = [];
+
+    // 🚀 新增：競爭社區代碼清單（Set，比對用）
+    let COMPETING_CODES = new Set();
+
+    // 🚀 新增：頁面就緒狀態旗標
+    let planDataLoaded = false;      // getPlanData 是否已成功回來
+    let communityFound = false;      // 目前輸入的社區代碼是否查得到社區主檔資料
+    let isCompetingCommunity = false; // 目前輸入的社區代碼是否存在於競爭社區清單
+    let communityInfo = null;        // { found, code, name, address }
+
+    // 🚀 新增：社區代碼查詢的 debounce 計時器與競態保護用序號
+    let commDebounceTimer = null;
+    let commLookupToken = 0;
 
     // 🚀 新增：登入使用者資訊（liff.getProfile）
     let CURRENT_USER = { displayName: "未知", userId: "" };
@@ -159,9 +184,8 @@
     let LAST_PHRASE_DATA = null;
 
     // ── 頁面初始化 ──
-    // 🚀 調整：方案資料載入(loadPlanData)與 LIFF 身份驗證改為「並行」而非「序列」，
-    // 避免 LIFF 登入卡住/失敗時，連帶讓方案下拉選單也一直停在「載入中」。
-    // 方案資料載入不需要使用者身份，只有「複製後寫入使用記錄」才需要 CURRENT_USER。
+    // 方案資料載入(loadPlanData)、競爭社區清單載入(loadCompetingCodes)、LIFF 身份驗證三者「並行」，
+    // 避免任何一個卡住/失敗連帶讓其他功能停在「載入中」。
     window.onload = async function() {
         // 1. URL 帶入序號
         const params = new URLSearchParams(window.location.search);
@@ -173,17 +197,23 @@
             document.getElementById('autoBanner').style.display = 'block';
         }
 
-        // 2. 從 GAS 載入方案資料 —— 不等待 LIFF，直接開始
+        // 2. 從 GAS 載入方案資料 —— 不等待其他流程，直接開始
         loadPlanData();
 
-        // 3. 初始化 LIFF，取得使用者身份 —— 獨立進行，不阻擋方案下拉
+        // 3. 🚀 新增：從 GAS 載入競爭社區清單 —— 同樣不等待，並行進行
+        loadCompetingCodes();
+
+        // 4. 🚀 新增：綁定社區代碼輸入框事件
+        document.getElementById('commCode').addEventListener('input', onCommCodeInput);
+
+        // 5. 初始化 LIFF，取得使用者身份 —— 獨立進行，不阻擋其他流程
         try {
             await liff.init({ liffId: LIFF_ID });
 
             if (!liff.isLoggedIn()) {
                 // liff.login() 會導向 LINE 登入頁，成功後重新導回本頁（帶原網址參數）
                 liff.login({ redirectUri: window.location.href });
-                return; // login 會重新導向，這裡先中止，不影響已經在跑的 loadPlanData()
+                return; // login 會重新導向，這裡先中止，不影響已經在跑的其他流程
             }
 
             const profile = await liff.getProfile();
@@ -210,8 +240,8 @@
             }
 
             PLAN_ROWS = data;
-            buildPlanSelect();
-            document.getElementById('generateBtn').disabled = false;
+            planDataLoaded = true;
+            updatePlanAvailability();
 
         } catch (err) {
             console.error("loadPlanData error:", err);
@@ -221,9 +251,151 @@
         }
     }
 
-    // 建立「方案別」下拉（去重）
+    // 🚀 新增：載入競爭社區清單（CORE_SS_ID 內的「競爭社區清單」分頁，205 筆規模，一次撈回前端比對）
+    async function loadCompetingCodes() {
+        try {
+            const res  = await fetch(`${API_URL}?action=getCompetingCodes`, { redirect: 'follow' });
+            const data = await res.json();
+
+            if (!Array.isArray(data)) {
+                throw new Error(data && data.error ? data.error : "回傳格式錯誤");
+            }
+
+            COMPETING_CODES = new Set(data.map(c => String(c || "").trim().toUpperCase()));
+
+            // 如果使用者在這支 API 回來之前就已經查完社區代碼，這裡要回頭補判斷一次「是否為競爭社區」
+            if (communityFound && communityInfo) {
+                isCompetingCommunity = COMPETING_CODES.has(String(communityInfo.code || "").trim().toUpperCase());
+                updatePlanAvailability();
+            }
+        } catch (err) {
+            // 競爭社區清單載入失敗不阻斷主流程，但特殊方案會直接視為「無法解鎖」，維持保守行為
+            console.error("loadCompetingCodes error:", err);
+        }
+    }
+
+    // 🚀 新增：社區代碼輸入框事件（debounce 後才查詢）
+    function onCommCodeInput() {
+        clearTimeout(commDebounceTimer);
+        const raw = document.getElementById('commCode').value;
+
+        // 使用者一開始改動輸入內容，就先讓下方方案鎖住、清空舊的查詢結果，避免誤用到上一個代碼的資料
+        communityFound = false;
+        isCompetingCommunity = false;
+        communityInfo = null;
+        const nameInput = document.getElementById('commName');
+        nameInput.value = '';
+        nameInput.classList.remove('readonly-filled');
+        updatePlanAvailability();
+
+        if (!raw.trim()) {
+            setCommHint('');
+            return;
+        }
+
+        setCommHint('⏳ 查詢中...', 'loading');
+        commDebounceTimer = setTimeout(() => lookupCommunity(raw), 500);
+    }
+
+    // 🚀 新增：呼叫 GAS 精確比對社區代碼，帶出社區名稱／地址，並判斷是否為競爭社區
+    async function lookupCommunity(rawCode) {
+        const code = rawCode.trim();
+        if (!code) { setCommHint(''); return; }
+
+        const myToken = ++commLookupToken;
+
+        try {
+            const res  = await fetch(`${API_URL}?action=getCommunityByCode&code=${encodeURIComponent(code)}`, { redirect: 'follow' });
+            const data = await res.json();
+
+            // 使用者在這次查詢還沒回來前又改了輸入內容，這次回應已經過期，直接丟棄
+            if (myToken !== commLookupToken) return;
+
+            if (data && data.found) {
+                communityFound = true;
+                communityInfo = data;
+                isCompetingCommunity = COMPETING_CODES.has(String(data.code || "").trim().toUpperCase());
+
+                const nameInput = document.getElementById('commName');
+                nameInput.value = data.name;
+                nameInput.classList.add('readonly-filled');
+
+                setCommHint(isCompetingCommunity ? '✅ 已查得社區，屬競爭社區，開放特殊方案' : '✅ 已查得社區', 'ok');
+            } else {
+                communityFound = false;
+                isCompetingCommunity = false;
+                communityInfo = null;
+                setCommHint('❌ 查無此社區代碼，此片語功能不支援此社區', 'error');
+            }
+        } catch (err) {
+            if (myToken !== commLookupToken) return;
+            console.error("lookupCommunity error:", err);
+            communityFound = false;
+            isCompetingCommunity = false;
+            communityInfo = null;
+            setCommHint('⚠️ 查詢失敗，請確認網路後重新輸入一次社區代碼', 'error');
+        } finally {
+            if (myToken === commLookupToken) updatePlanAvailability();
+        }
+    }
+
+    function setCommHint(text, type) {
+        const el = document.getElementById('commHint');
+        el.textContent = text;
+        el.style.display = text ? 'block' : 'none';
+        el.style.color = type === 'error' ? '#e53935' : (type === 'ok' ? '#1DB446' : '#888');
+    }
+
+    // 🚀 新增：社區代碼／競爭社區狀態一有變動，就統一由這裡決定①方案別能不能選、選項有哪些，
+    // 並強制清空②③④與已產生的片語欄位，避免殘留不該存在的組合。
+    function updatePlanAvailability() {
+        const selPlan = document.getElementById('selPlan');
+        const ready = planDataLoaded && communityFound;
+
+        resetCascadeBelowPlan();
+
+        if (!ready) {
+            selPlan.innerHTML = '<option value="">' +
+                (!planDataLoaded ? '── 載入中 ──' : '── 請先輸入有效的社區代碼 ──') +
+                '</option>';
+            selPlan.disabled = true;
+            refreshGenerateButton();
+            return;
+        }
+
+        VISIBLE_PLAN_ROWS = PLAN_ROWS.filter(r => !r.competing || isCompetingCommunity);
+        buildPlanSelect();
+        refreshGenerateButton();
+    }
+
+    // 🚀 新增：只重置②③④與方案預覽小卡，不動①方案別本身（①由 updatePlanAvailability 統一處理）
+    function resetCascadeBelowPlan() {
+        const selSpeed = document.getElementById('selSpeed');
+        const selMod = document.getElementById('selMod');
+        const selGroup = document.getElementById('selGroup');
+
+        selSpeed.innerHTML = '<option value="">── 請先選方案別 ──</option>';
+        selSpeed.disabled = true;
+        selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
+        selMod.disabled = true;
+        selGroup.innerHTML = '<option value="">── 請先選速率 ──</option>';
+        selGroup.disabled = true;
+
+        document.getElementById('modGroup').style.display = 'none';
+        document.getElementById('speedGroup').style.display = 'block';
+        document.getElementById('groupGroupWrapper').style.display = 'block';
+
+        clearPlanResult();
+    }
+
+    // 🚀 新增：集中控制「開始合併片語」按鈕是否可按
+    function refreshGenerateButton() {
+        document.getElementById('generateBtn').disabled = !(planDataLoaded && communityFound);
+    }
+
+    // 建立「方案別」下拉（去重；資料來源改為 VISIBLE_PLAN_ROWS，已依競爭社區狀態過濾過）
     function buildPlanSelect() {
-        const plans = [...new Set(PLAN_ROWS.map(r => r.plan))];
+        const plans = [...new Set(VISIBLE_PLAN_ROWS.map(r => r.plan))];
         const sel = document.getElementById('selPlan');
         sel.innerHTML = '<option value="">── 請選擇方案別 ──</option>';
         plans.forEach(p => {
@@ -257,10 +429,10 @@
         if (!plan) { selSpeed.disabled = true; return; }
 
         const speeds = [...new Set(
-            PLAN_ROWS.filter(r => r.plan === plan).map(r => r.speed)
+            VISIBLE_PLAN_ROWS.filter(r => r.plan === plan).map(r => r.speed)
         )];
 
-        // 🚀 若此方案別底下「所有」速率都是空字串（例如「無上網MOD」），
+        // 若此方案別底下「所有」速率都是空字串（例如「無上網MOD」），
         // 代表這個方案別本來就沒有速率概念，跳過速率層，直接往下判斷MOD層。
         const hasRealSpeed = speeds.some(s => s !== "");
 
@@ -291,7 +463,7 @@
         proceedAfterSpeed(plan, speed);
     }
 
-    // 🚀 新增：共用邏輯，速率確定後（不論是使用者選的，還是因無速率而自動帶入空字串），
+    // 共用邏輯，速率確定後（不論是使用者選的，還是因無速率而自動帶入空字串），
     // 判斷此 方案別+速率 組合下是否有 MOD 選項，決定顯示 MOD 下拉或直接跳到社區分群。
     function proceedAfterSpeed(plan, speed) {
         const selMod = document.getElementById('selMod');
@@ -305,7 +477,7 @@
         selGroup.disabled = true;
         groupGroupWrapper.style.display = 'block'; // 重置為可見，實際是否隱藏交由 buildGroupOptions 判斷
 
-        const matchedRows = PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
+        const matchedRows = VISIBLE_PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
         const modOptions = [...new Set(matchedRows.map(r => r.mod).filter(m => m !== ""))];
 
         if (modOptions.length > 0) {
@@ -353,10 +525,10 @@
         groupGroupWrapper.style.display = 'block';
 
         const groups = [...new Set(
-            PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod).map(r => r.group)
+            VISIBLE_PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod).map(r => r.group)
         )];
 
-        // 🚀 若此組合下「所有」分群都是空字串（例如部分「無上網MOD」項目），
+        // 若此組合下「所有」分群都是空字串（例如部分「無上網MOD」項目），
         // 代表這個組合本來就沒有分群概念，跳過這一層，直接完成選擇。
         const hasRealGroup = groups.some(g => g !== "");
 
@@ -385,10 +557,10 @@
         finalizeSelection(plan, speed, mod, group);
     }
 
-    // 🚀 新增：共用邏輯，不論社區分群是使用者選的、還是因無分群概念而自動帶入空字串，
+    // 共用邏輯，不論社區分群是使用者選的、還是因無分群概念而自動帶入空字串，
     // 都用這個函式比對出最終的社區優惠碼/方案代碼，並顯示確認小卡。
     function finalizeSelection(plan, speed, mod, group) {
-        const match = PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.mod === mod && r.group === group);
+        const match = VISIBLE_PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.mod === mod && r.group === group);
         if (!match) { clearPlanResult(); return; }
 
         const couponInput = document.getElementById('planCouponCode');
@@ -432,7 +604,6 @@
     const ENTERPRISE_KEYWORDS = ["世霖科技", "陳盈君"];
 
     // 🚀 新增：依「方案別」名稱判斷優惠序號前綴（含 POC 字樣→F00C，否則→F000）
-    // 修正：先前版本此函式漏了結尾的 }，導致整個 <script> 語法錯誤、全部功能卡死
     function getCouponPrefix(planName) {
         return (planName && planName.includes("POC")) ? "F00C" : "F000";
     }
@@ -445,6 +616,12 @@
 
     // ── 產生片語 ──
     function generatePhrase() {
+        // 🚀 防呆：理論上按鈕在未查得社區代碼前是 disabled 狀態，這裡多一層保險，避免例外情況下仍被觸發
+        if (!communityFound || !communityInfo) {
+            alert('請先輸入有效的社區代碼，系統查得社區名稱後才能產生片語。');
+            return;
+        }
+
         const plan       = document.getElementById('selPlan').value || "(未選)";
         const couponPrefix = getCouponPrefix(plan);
         const speedSelect = document.getElementById('selSpeed');
@@ -455,7 +632,8 @@
         const group       = groupSelect.disabled ? "" : groupSelect.value; // 無分群選項時視為空字串，不顯示在片語
         const planCoupon = document.getElementById('planCouponCode').value || "(未填)";
         const planCode   = document.getElementById('planCode').value || "(未填)";
-        const comm       = document.getElementById('commId').value || "(未填)";
+        // 🚀 社區名稱／識別碼改為由社區代碼查詢結果組成，不再手動輸入
+        const comm       = `${communityInfo.name}／${communityInfo.code}`;
         const coupon     = document.getElementById('couponCode').value || "(未填)";
         const staff      = document.getElementById('staffId').value || "(未填)";
         const referrerName = document.getElementById('referrerName').value || "(未填)";
@@ -464,7 +642,7 @@
         const isLineLead = document.getElementById('selLineLead').value;
         const noteRaw    = document.getElementById('extraNote').value.trim();
 
-        // 🚀 備註組合邏輯：
+        // 備註組合邏輯：
         // 1. 「此為社區團隊送件」一律固定出現，不受「是否為LINE商機通報案」影響
         // 2. 選「是」時，額外疊加「LINE商機通報案」字樣
         // 3. 推薦人有填時，疊加「推薦人：姓名」與戶別標記
