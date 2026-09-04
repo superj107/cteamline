@@ -16,7 +16,12 @@
     button:active { background: #158f37; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     #loader { text-align: center; color: #888; padding: 20px; }
-    
+
+    /* 🚀 新增：依代碼查詢區塊，用分隔線跟上面的行政區+關鍵字查詢區隔開 */
+    .code-search-block { border-top: 1px dashed #ddd; margin-top: 15px; padding-top: 12px; }
+    .code-search-block button { background: #4285F4; }
+    .code-search-block button:active { background: #3367d6; }
+
     /* 搜尋結果列表樣式 */
     .item { background: #fff; padding: 15px; border: 1px solid #eee; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
     .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
@@ -25,22 +30,31 @@
     .map-btn { padding: 6px 12px; background: #4285F4; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; width: auto; margin: 0; }
     .item-detail { font-size: 14px; color: #555; line-height: 1.6; border-top: 1px dashed #eee; padding-top: 8px; }
     .highlight { color: #2c3e50; font-weight: 600; }
+    /* 競爭社區方案標籤 */
+    .competing-badge { display: inline-block; margin-top: 10px; padding: 5px 10px; background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; border-radius: 6px; font-size: 13px; font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="card">
     <h3>🏢 社區代碼查詢</h3>
     <div id="loader">正在連線至資料庫...</div>
-    
+
     <div id="main-ui" style="display:none;">
       <label for="distSelect">選擇行政區</label>
       <select id="distSelect"></select>
-      
+
       <label for="keyword">關鍵字 (路名或社區名)</label>
       <input type="text" id="keyword" placeholder="例如：中山路 或 幸福社區">
-      
+
       <button id="searchBtn" onclick="handleSearch()">立即搜尋</button>
-      
+
+      <!-- 🚀 新增：依社區代碼精確查詢，跳過行政區/關鍵字，適合已經知道代碼的情況 -->
+      <div class="code-search-block">
+        <label for="codeInput">或直接輸入社區代碼查詢（精確比對）</label>
+        <input type="text" id="codeInput" placeholder="例如：SH00519">
+        <button id="codeSearchBtn" onclick="handleCodeSearch()">依代碼查詢</button>
+      </div>
+
       <div id="results" style="margin-top: 20px;"></div>
     </div>
   </div>
@@ -48,11 +62,23 @@
   <script>
     const API_URL = "https://script.google.com/macros/s/AKfycbzSEopZ05o3bN-ROcPpLTbcrjXP9WgOmv6sDP4M8kbofRaJLarBOOJlCigEs-0GM0k/exec";
 
+    // 競爭社區代碼清單（Set，比對用），頁面載入時預先撈一次，之後查詢結果比對純前端進行
+    let COMPETING_CODES = new Set();
+
     window.onload = function() {
-      // 支援鍵盤 Enter 鍵觸發搜尋
+      // 支援鍵盤 Enter 鍵觸發搜尋（行政區+關鍵字模式）
       document.getElementById('keyword').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') handleSearch();
       });
+
+      // 🚀 新增：支援鍵盤 Enter 鍵觸發搜尋（代碼精確查詢模式）
+      document.getElementById('codeInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') handleCodeSearch();
+      });
+
+      // 載入競爭社區清單，跟 LIFF 初始化並行，互不阻塞
+      // 若載入失敗，僅代表「屬競爭社區方案」標籤不會顯示，不影響查詢本身
+      loadCompetingCodes();
 
       // 初始化 LIFF
       liff.init({ liffId: "2010021235-m0rWdR4i" }).then(() => {
@@ -63,6 +89,23 @@
       });
     };
 
+    // 讀取競爭社區清單
+    async function loadCompetingCodes() {
+      try {
+        const response = await fetch(`${API_URL}?action=getCompetingCodes`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          COMPETING_CODES = new Set(data.map(c => String(c || "").trim().toUpperCase()));
+        }
+      } catch (err) {
+        console.error("loadCompetingCodes error:", err);
+        // 失敗不阻斷主流程，維持空 Set，畫面上不會有任何項目誤標成競爭社區
+      }
+    }
+
     // 初始化：抓取行政區選單
     async function initData() {
       try {
@@ -72,13 +115,13 @@
         });
         const list = await response.json();
         const select = document.getElementById('distSelect');
-        
+
         list.forEach(d => {
           let opt = document.createElement('option');
           opt.value = opt.textContent = d;
           select.appendChild(opt);
         });
-        
+
         document.getElementById('loader').style.display = 'none';
         document.getElementById('main-ui').style.display = 'block';
       } catch (err) {
@@ -86,13 +129,13 @@
       }
     }
 
-    // 搜尋邏輯
+    // 搜尋邏輯（行政區＋關鍵字，可能有多筆結果）
     async function handleSearch() {
       const dist = document.getElementById('distSelect').value;
       const kw = document.getElementById('keyword').value;
       const resDiv = document.getElementById('results');
       const searchBtn = document.getElementById('searchBtn');
-      
+
       resDiv.innerHTML = "<p style='text-align:center; color: #888;'>🔍 搜尋中...</p>";
       searchBtn.disabled = true;
 
@@ -102,45 +145,87 @@
           redirect: 'follow'
         });
         const data = await response.json();
-        
+
         if (!data || data.length === 0) {
           resDiv.innerHTML = "<p style='text-align:center; color: #888;'>查無結果，請換個關鍵字試試</p>";
           return;
         }
 
-        // 組成 HTML 字串 (已修正 <div> 閉合與排版層級)
-        let htmlContent = "";
-        data.forEach(item => {
-          const copyContent = `${item.name}／${item.code}`;
-          const hasLocation = item.lat && item.lng;
-          const mapBtn = hasLocation
-            ? `<button class="map-btn" onclick="openMap(${item.lat}, ${item.lng})">🗺️ 地圖</button>`
-            : "";
-        
-          htmlContent += `
-            <div class="item">
-              <div class="item-header">
-                <span class="item-name">${item.name}／${item.code}</span>
-                <button class="copy-btn" onclick="copyText('${copyContent}', this)">📋 複製</button>
-              </div>
-              <div class="item-detail">
-                📍 地址：${item.address || "無"}<br>
-                👥 社區分群：<span class="highlight">${item.group || "無"}</span><br>
-                👤 認養人：<span class="highlight">${item.adopter || "無"}</span><br>
-                🏢 所屬單位：<span class="highlight">${item.unit || "無"}</span><br>
-                🕐 最近關懷時間：<span class="highlight">${item.lastCareTime || "無"}</span>
-              </div>
-              ${mapBtn ? `<div style="margin-top: 10px;">${mapBtn}</div>` : ""}
-            </div>`;
-        });       
-        resDiv.innerHTML = htmlContent;
-        
+        resDiv.innerHTML = data.map(item => buildItemCardHtml(item)).join('');
+
       } catch (err) {
         console.error(err);
         resDiv.innerHTML = "<p style='text-align:center; color: red;'>搜尋發生錯誤，請稍後再試</p>";
       } finally {
         searchBtn.disabled = false;
       }
+    }
+
+    // 🚀 新增：依社區代碼精確查詢（單筆結果），呼叫跟 phrase.html 共用的 getCommunityByCode
+    async function handleCodeSearch() {
+      const code = document.getElementById('codeInput').value.trim();
+      const resDiv = document.getElementById('results');
+      const codeSearchBtn = document.getElementById('codeSearchBtn');
+
+      if (!code) {
+        resDiv.innerHTML = "<p style='text-align:center; color: #888;'>請先輸入社區代碼</p>";
+        return;
+      }
+
+      resDiv.innerHTML = "<p style='text-align:center; color: #888;'>🔍 查詢中...</p>";
+      codeSearchBtn.disabled = true;
+
+      try {
+        const response = await fetch(`${API_URL}?action=getCommunityByCode&code=${encodeURIComponent(code)}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+        const data = await response.json();
+
+        if (!data || !data.found) {
+          resDiv.innerHTML = "<p style='text-align:center; color: #888;'>查無此社區代碼，請確認代碼是否正確</p>";
+          return;
+        }
+
+        resDiv.innerHTML = buildItemCardHtml(data);
+
+      } catch (err) {
+        console.error(err);
+        resDiv.innerHTML = "<p style='text-align:center; color: red;'>查詢發生錯誤，請稍後再試</p>";
+      } finally {
+        codeSearchBtn.disabled = false;
+      }
+    }
+
+    // 🚀 新增：共用的查詢結果卡片產生器，行政區+關鍵字搜尋（多筆）跟代碼精確查詢（單筆）都用這個，
+    // 確保兩種查詢方式呈現出來的卡片樣式、欄位、競爭社區標籤邏輯完全一致，不會有兩套邏輯各自維護、跑掉不同步的問題。
+    function buildItemCardHtml(item) {
+      const copyContent = `${item.name}／${item.code}`;
+      const hasLocation = item.lat && item.lng;
+      const mapBtn = hasLocation
+        ? `<button class="map-btn" onclick="openMap(${item.lat}, ${item.lng})">🗺️ 地圖</button>`
+        : "";
+      const isCompeting = COMPETING_CODES.has(String(item.code || "").trim().toUpperCase());
+      const competingBadge = isCompeting
+        ? `<div class="competing-badge">🏆 屬競爭社區方案</div>`
+        : "";
+
+      return `
+        <div class="item">
+          <div class="item-header">
+            <span class="item-name">${item.name}／${item.code}</span>
+            <button class="copy-btn" onclick="copyText('${copyContent}', this)">📋 複製</button>
+          </div>
+          <div class="item-detail">
+            📍 地址：${item.address || "無"}<br>
+            👥 社區分群：<span class="highlight">${item.group || "無"}</span><br>
+            👤 認養人：<span class="highlight">${item.adopter || "無"}</span><br>
+            🏢 所屬單位：<span class="highlight">${item.unit || "無"}</span><br>
+            🕐 最近關懷時間：<span class="highlight">${item.lastCareTime || "無"}</span>
+          </div>
+          ${competingBadge}
+          ${mapBtn ? `<div style="margin-top: 10px;">${mapBtn}</div>` : ""}
+        </div>`;
     }
 
     // 複製文字功能
@@ -153,7 +238,7 @@
         fallbackCopyText(text, btn);
       }
     }
-    
+
     function fallbackCopyText(text, btn) {
       const ta = document.createElement('textarea');
       ta.value = text;
