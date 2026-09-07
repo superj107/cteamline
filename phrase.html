@@ -318,8 +318,10 @@
 
             if (data && data.found) {
                 communityFound = true;
-                // 🚀 分群文字直接使用社區主檔查回來的原始格式（例如「A (70戶以上)」），不額外加工，
-                // 畫面顯示、片語合併、AB分群比對（一律用 getGroupABPrefix 取開頭字母）都吃這個值
+                // 🚀 分群文字統一正規化成固定格式（不管 GAS 那邊實際回傳「A」還是別的寫法，
+                // 前端只認開頭的 A/B 字母，一律輸出「A(70戶以上)」／「B(70戶以下)」；
+                // 查不到明確AB的（例如「無」）維持原樣，不強行轉換）
+                data.group = formatGroupDisplay(data.group);
                 communityInfo = data;
                 isCompetingCommunity = COMPETING_CODES.has(String(data.code || "").trim().toUpperCase());
 
@@ -405,7 +407,18 @@
         return "";
     }
 
-    // 🚀 新增：記錄最後一次 finalizeSelection 比對到的方案組合本身有沒有分群概念
+    // 🚀 新增：把社區主檔查回來的分群文字統一正規化成固定顯示格式。
+    // 不管 GAS 端實際回傳的是「A」、「A (70戶以上)」還是其他寫法，這裡只認開頭的 A/B 字母，
+    // 一律輸出「A(70戶以上)」／「B(70戶以下)」；查不到明確AB的（例如「無」）維持原樣，不強行轉換。
+    function formatGroupDisplay(groupText) {
+        const ab = getGroupABPrefix(groupText);
+        if (ab === "A") return "A(70戶以上)";
+        if (ab === "B") return "B(70戶以下)";
+        const s = String(groupText || "").trim();
+        return s || "無";
+    }
+
+    // 記錄最後一次 finalizeSelection 比對到的方案組合本身有沒有分群概念
     // （沒有分群概念的組合，例如部分「無上網MOD」，片語裡不顯示社區分群這行）
     let LAST_MATCH_HAS_GROUP = false;
 
