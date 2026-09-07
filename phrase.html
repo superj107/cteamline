@@ -55,6 +55,11 @@
         <label>社區名稱（自動帶入，唯讀）</label>
         <input type="text" id="commName" readonly placeholder="輸入正確的社區代碼後自動帶出">
     </div>
+    <!-- 🚀 新增：社區分群（自動帶入，來自社區主檔的個家分群，非下方方案選擇的社區分群） -->
+    <div class="input-group">
+        <label>社區分群（自動帶入，唯讀）</label>
+        <input type="text" id="commGroup" readonly placeholder="輸入正確的社區代碼後自動帶出">
+    </div>
 
     <!-- ── 方案選擇（連動，資料從 Sheet 載入）── -->
     <div class="section-title">方案選擇</div>
@@ -286,6 +291,10 @@
         const nameInput = document.getElementById('commName');
         nameInput.value = '';
         nameInput.classList.remove('readonly-filled');
+        // 🚀 新增：社區分群欄位同步清空
+        const groupInput = document.getElementById('commGroup');
+        groupInput.value = '';
+        groupInput.classList.remove('readonly-filled');
         updatePlanAvailability();
 
         if (!raw.trim()) {
@@ -313,12 +322,21 @@
 
             if (data && data.found) {
                 communityFound = true;
+                // 🚀 把社區主檔查回來的分群文字統一補成跟方案選單一致的格式（例如「A (70戶以上)」→「A群 (70戶以上)」），
+                // 之後畫面顯示、跟方案列表的AB分群比對，都吃這個已經正規化過的值
+                data.group = formatGroupForDisplay(data.group);
                 communityInfo = data;
                 isCompetingCommunity = COMPETING_CODES.has(String(data.code || "").trim().toUpperCase());
 
                 const nameInput = document.getElementById('commName');
                 nameInput.value = data.name;
                 nameInput.classList.add('readonly-filled');
+
+                // 社區分群一併帶出（來自社區主檔的個家分群，跟下方方案選擇裡的社區分群雖然是不同資料來源，
+                // 🚀 但現在會用來限制④能選的方案：非競爭社區只放行跟這裡一致的AB分群，競爭社區則不限制）
+                const groupInput = document.getElementById('commGroup');
+                groupInput.value = data.group || '無';
+                groupInput.classList.add('readonly-filled');
 
                 setCommHint(isCompetingCommunity ? '✅ 已查得社區，屬競爭社區，開放特殊方案' : '✅ 已查得社區', 'ok');
             } else {
@@ -363,9 +381,41 @@
             return;
         }
 
-        VISIBLE_PLAN_ROWS = PLAN_ROWS.filter(r => !r.competing || isCompetingCommunity);
+        // 🚀 新增：社區若不屬於競爭社區，且社區主檔查得到明確的AB分群，方案列表要限制成只放行同一個AB分群
+        // （或該列本身沒有AB分群概念，例如「無上網MOD」）；競爭社區、或社區主檔AB分群不明確時，不做AB限制，A/B都放行。
+        const communityAB = isCompetingCommunity ? "" : getGroupABPrefix(communityInfo && communityInfo.group);
+
+        VISIBLE_PLAN_ROWS = PLAN_ROWS.filter(r => {
+            // 既有的競爭社區旗標判斷
+            if (r.competing && !isCompetingCommunity) return false;
+
+            // 🚀 新增：AB 分群限制
+            if (r.group && communityAB) {
+                const rowAB = getGroupABPrefix(r.group);
+                if (rowAB && rowAB !== communityAB) return false;
+            }
+
+            return true;
+        });
         buildPlanSelect();
         refreshGenerateButton();
+    }
+
+    // 🚀 新增：從分群文字取出開頭的 A 或 B（不做整串文字比對，避免「A群 (70戶以上)」跟「A (70戶以上)」
+    // 這種來源不同、格式略有差異的文字因為比對不到而誤判）。查不到明確AB（例如「無」、「不分群」、空字串）回傳空字串代表無法判斷。
+    function getGroupABPrefix(groupText) {
+        const s = String(groupText || "").trim();
+        if (s.startsWith("A")) return "A";
+        if (s.startsWith("B")) return "B";
+        return "";
+    }
+
+    // 🚀 新增：把社區主檔查回來的分群文字（例如「A (70戶以上)」）補成跟方案選單一致的格式（「A群 (70戶以上)」），
+    // 純粹是顯示用的文字調整，不影響比對邏輯（比對一律用 getGroupABPrefix 取開頭字母）
+    function formatGroupForDisplay(groupText) {
+        const s = String(groupText || "").trim();
+        if (!s) return '無';
+        return s.replace(/^([AB])/, '$1群');
     }
 
     // 🚀 新增：只重置②③④與方案預覽小卡，不動①方案別本身（①由 updatePlanAvailability 統一處理）
