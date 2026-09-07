@@ -87,12 +87,8 @@
         </select>
     </div>
 
-    <div class="input-group" id="groupGroupWrapper">
-        <label id="groupLabel">社區分群</label>
-        <select id="selGroup" onchange="onGroupChange()" disabled>
-            <option value="">── 請先選速率 ──</option>
-        </select>
-    </div>
+    <!-- 🚀 移除：原本的社區分群手動下拉已刪除，改由最上方自動查得的社區分群（communityInfo.group）
+         自動判斷並帶入片語合併，詳見 autoFinalizeGroup() -->
 
     <!-- 選完後的預覽小卡 -->
     <div id="planPreview"></div>
@@ -322,9 +318,8 @@
 
             if (data && data.found) {
                 communityFound = true;
-                // 🚀 把社區主檔查回來的分群文字統一補成跟方案選單一致的格式（例如「A (70戶以上)」→「A群 (70戶以上)」），
-                // 之後畫面顯示、跟方案列表的AB分群比對，都吃這個已經正規化過的值
-                data.group = formatGroupForDisplay(data.group);
+                // 🚀 分群文字直接使用社區主檔查回來的原始格式（例如「A (70戶以上)」），不額外加工，
+                // 畫面顯示、片語合併、AB分群比對（一律用 getGroupABPrefix 取開頭字母）都吃這個值
                 communityInfo = data;
                 isCompetingCommunity = COMPETING_CODES.has(String(data.code || "").trim().toUpperCase());
 
@@ -401,7 +396,7 @@
         refreshGenerateButton();
     }
 
-    // 🚀 新增：從分群文字取出開頭的 A 或 B（不做整串文字比對，避免「A群 (70戶以上)」跟「A (70戶以上)」
+    // 從分群文字取出開頭的 A 或 B（不做整串文字比對，避免「A群 (70戶以上)」跟「A (70戶以上)」
     // 這種來源不同、格式略有差異的文字因為比對不到而誤判）。查不到明確AB（例如「無」、「不分群」、空字串）回傳空字串代表無法判斷。
     function getGroupABPrefix(groupText) {
         const s = String(groupText || "").trim();
@@ -410,40 +405,33 @@
         return "";
     }
 
-    // 🚀 新增：把社區主檔查回來的分群文字（例如「A (70戶以上)」）補成跟方案選單一致的格式（「A群 (70戶以上)」），
-    // 純粹是顯示用的文字調整，不影響比對邏輯（比對一律用 getGroupABPrefix 取開頭字母）
-    function formatGroupForDisplay(groupText) {
-        const s = String(groupText || "").trim();
-        if (!s) return '無';
-        return s.replace(/^([AB])/, '$1群');
-    }
+    // 🚀 新增：記錄最後一次 finalizeSelection 比對到的方案組合本身有沒有分群概念
+    // （沒有分群概念的組合，例如部分「無上網MOD」，片語裡不顯示社區分群這行）
+    let LAST_MATCH_HAS_GROUP = false;
 
-    // 🚀 新增：只重置②③④與方案預覽小卡，不動①方案別本身（①由 updatePlanAvailability 統一處理）
+    // 只重置②③與方案預覽小卡，不動①方案別本身（①由 updatePlanAvailability 統一處理）
+    // 🚀 原本的④社區分群手動下拉已移除，改由 autoFinalizeGroup() 用最上方查得的社區AB分群自動判斷
     function resetCascadeBelowPlan() {
         const selSpeed = document.getElementById('selSpeed');
         const selMod = document.getElementById('selMod');
-        const selGroup = document.getElementById('selGroup');
 
         selSpeed.innerHTML = '<option value="">── 請先選方案別 ──</option>';
         selSpeed.disabled = true;
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
         selMod.disabled = true;
-        selGroup.innerHTML = '<option value="">── 請先選速率 ──</option>';
-        selGroup.disabled = true;
 
         document.getElementById('modGroup').style.display = 'none';
         document.getElementById('speedGroup').style.display = 'block';
-        document.getElementById('groupGroupWrapper').style.display = 'block';
 
         clearPlanResult();
     }
 
-    // 🚀 新增：集中控制「開始合併片語」按鈕是否可按
+    // 集中控制「開始合併片語」按鈕是否可按
     function refreshGenerateButton() {
         document.getElementById('generateBtn').disabled = !(planDataLoaded && communityFound);
     }
 
-    // 建立「方案別」下拉（去重；資料來源改為 VISIBLE_PLAN_ROWS，已依競爭社區狀態過濾過）
+    // 建立「方案別」下拉（去重；資料來源改為 VISIBLE_PLAN_ROWS，已依競爭社區/AB分群狀態過濾過）
     function buildPlanSelect() {
         const plans = [...new Set(VISIBLE_PLAN_ROWS.map(r => r.plan))];
         const sel = document.getElementById('selPlan');
@@ -461,19 +449,14 @@
         const plan = document.getElementById('selPlan').value;
         const selSpeed = document.getElementById('selSpeed');
         const selMod = document.getElementById('selMod');
-        const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
         const speedGroup = document.getElementById('speedGroup');
-        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
 
         selSpeed.innerHTML = '<option value="">── 請選擇速率 ──</option>';
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
-        selGroup.innerHTML = '<option value="">── 請先選速率 ──</option>';
         selMod.disabled = true;
-        selGroup.disabled = true;
         modGroup.style.display = 'none';
         speedGroup.style.display = 'block';
-        groupGroupWrapper.style.display = 'block';
         clearPlanResult();
 
         if (!plan) { selSpeed.disabled = true; return; }
@@ -514,24 +497,18 @@
     }
 
     // 共用邏輯，速率確定後（不論是使用者選的，還是因無速率而自動帶入空字串），
-    // 判斷此 方案別+速率 組合下是否有 MOD 選項，決定顯示 MOD 下拉或直接跳到社區分群。
+    // 判斷此 方案別+速率 組合下是否有 MOD 選項，決定顯示 MOD 下拉、或直接自動完成分群比對。
     function proceedAfterSpeed(plan, speed) {
         const selMod = document.getElementById('selMod');
-        const selGroup = document.getElementById('selGroup');
         const modGroup = document.getElementById('modGroup');
-        const groupLabel = document.getElementById('groupLabel');
-        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
 
         selMod.innerHTML = '<option value="">── 請選擇MOD種類 ──</option>';
-        selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
-        selGroup.disabled = true;
-        groupGroupWrapper.style.display = 'block'; // 重置為可見，實際是否隱藏交由 buildGroupOptions 判斷
 
         const matchedRows = VISIBLE_PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed);
         const modOptions = [...new Set(matchedRows.map(r => r.mod).filter(m => m !== ""))];
 
         if (modOptions.length > 0) {
-            // 有 MOD 選項：顯示 MOD 下拉，社區分群要等選完 MOD 才能建立
+            // 有 MOD 選項：顯示 MOD 下拉，選完 MOD 才自動完成分群比對
             modGroup.style.display = 'block';
             modOptions.forEach(m => {
                 const opt = document.createElement('option');
@@ -539,18 +516,16 @@
                 selMod.appendChild(opt);
             });
             selMod.disabled = false;
-            groupLabel.textContent = '社區分群';
-            selGroup.innerHTML = '<option value="">── 請先選MOD種類 ──</option>';
         } else {
-            // 無 MOD 選項：跳過這一層，直接用空字串比對建立社區分群選單
+            // 無 MOD 選項：跳過這一層，直接用空字串自動完成分群比對
             modGroup.style.display = 'none';
             selMod.disabled = true;
-            groupLabel.textContent = '社區分群';
-            buildGroupOptions(plan, speed, "");
+            autoFinalizeGroup(plan, speed, "");
         }
     }
 
-    // MOD種類選擇後，建立社區分群選單
+    // MOD種類選擇後，自動完成分群比對
+    // 🚀 原本這裡是建立社區分群下拉讓使用者手動選，現在改成呼叫 autoFinalizeGroup 自動判斷
     function onModChange() {
         const plan  = document.getElementById('selPlan').value;
         const speed = document.getElementById('selSpeed').disabled ? "" : document.getElementById('selSpeed').value;
@@ -558,60 +533,46 @@
 
         clearPlanResult();
 
-        if (!mod) {
-            document.getElementById('selGroup').innerHTML = '<option value="">── 請先選MOD種類 ──</option>';
-            document.getElementById('selGroup').disabled = true;
-            return;
-        }
-        buildGroupOptions(plan, speed, mod);
+        if (!mod) { return; }
+        autoFinalizeGroup(plan, speed, mod);
     }
 
-    // 共用函式，依 plan+speed+mod 建立社區分群下拉選單；若分群選項全為空字串則自動跳過
-    function buildGroupOptions(plan, speed, mod) {
-        const selGroup = document.getElementById('selGroup');
-        const groupGroupWrapper = document.getElementById('groupGroupWrapper');
+    // 🚀 新增：取代原本的④社區分群手動下拉。①~③選定後，VISIBLE_PLAN_ROWS 已經依社區自己的AB分群
+    // （或競爭社區不限制）篩選過，正常情況下這個組合底下只會剩一種分群可能，不需要使用者再選一次。
+    function autoFinalizeGroup(plan, speed, mod) {
+        const matchedRows = VISIBLE_PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod);
+        const realGroups = [...new Set(matchedRows.map(r => r.group).filter(g => g !== ""))];
 
-        selGroup.innerHTML = '<option value="">── 請選擇分群 ──</option>';
-        groupGroupWrapper.style.display = 'block';
-
-        const groups = [...new Set(
-            VISIBLE_PLAN_ROWS.filter(r => r.plan === plan && r.speed === speed && r.mod === mod).map(r => r.group)
-        )];
-
-        // 若此組合下「所有」分群都是空字串（例如部分「無上網MOD」項目），
-        // 代表這個組合本來就沒有分群概念，跳過這一層，直接完成選擇。
-        const hasRealGroup = groups.some(g => g !== "");
-
-        if (!hasRealGroup) {
-            groupGroupWrapper.style.display = 'none';
-            selGroup.disabled = true;
+        if (realGroups.length === 0) {
+            // 這個組合本來就沒有分群概念（例如部分「無上網MOD」），直接用空字串完成比對
             finalizeSelection(plan, speed, mod, "");
             return;
         }
 
-        groups.forEach(g => {
-            const opt = document.createElement('option');
-            opt.value = opt.textContent = g;
-            selGroup.appendChild(opt);
-        });
-        selGroup.disabled = false;
+        if (realGroups.length === 1) {
+            // 最常見情況：已經被AB分群篩選到只剩一種可能，直接採用，不需要使用者再點一次
+            finalizeSelection(plan, speed, mod, realGroups[0]);
+            return;
+        }
+
+        // 篩選後仍有多種分群可能：目前只會發生在「競爭社區」選到一般（非競業旗標）方案的情況，
+        // 因為競爭社區不限制AB、A群B群都會留著。這裡用社區自己查到的AB去挑對應那一筆；
+        // 若社區主檔本身查不到明確AB（顯示「無」），退而求其次採用第一筆，維持系統可用、不卡死使用者。
+        const communityAB = getGroupABPrefix(communityInfo && communityInfo.group);
+        const matched = realGroups.find(g => getGroupABPrefix(g) === communityAB);
+        finalizeSelection(plan, speed, mod, matched || realGroups[0]);
     }
 
-    function onGroupChange() {
-        const plan  = document.getElementById('selPlan').value;
-        const speed = document.getElementById('selSpeed').disabled ? "" : document.getElementById('selSpeed').value;
-        const mod   = document.getElementById('selMod').disabled ? "" : document.getElementById('selMod').value;
-        const group = document.getElementById('selGroup').value;
-
-        if (!group) { clearPlanResult(); return; }
-        finalizeSelection(plan, speed, mod, group);
-    }
-
-    // 共用邏輯，不論社區分群是使用者選的、還是因無分群概念而自動帶入空字串，
-    // 都用這個函式比對出最終的社區優惠碼/方案代碼，並顯示確認小卡。
+    // 共用邏輯，比對出最終的社區優惠碼/方案代碼，並顯示確認小卡。
+    // 🚀 分群顯示改用最上方社區代碼查詢得到的 communityInfo.group（例如「A (70戶以上)」），
+    // 不再顯示方案選單E欄的原始文字（例如「A群 (70戶以上)」或「不分群」）——
+    // 比對用的是傳進來的原始 group 文字（跟 Sheet 一致），顯示用的一律是社區主檔查到的文字。
     function finalizeSelection(plan, speed, mod, group) {
         const match = VISIBLE_PLAN_ROWS.find(r => r.plan === plan && r.speed === speed && r.mod === mod && r.group === group);
         if (!match) { clearPlanResult(); return; }
+
+        LAST_MATCH_HAS_GROUP = group !== "";
+        const displayGroup = LAST_MATCH_HAS_GROUP ? (communityInfo.group || "無") : "";
 
         const couponInput = document.getElementById('planCouponCode');
         const codeInput   = document.getElementById('planCode');
@@ -627,13 +588,14 @@
             ・方案別：<span>${plan}</span><br>
             ${speed ? '・速率：<span>' + speed + '</span><br>' : ''}
             ${mod ? '・MOD種類：<span>' + mod + '</span><br>' : ''}
-            ${group ? '・分群：<span>' + group + '</span><br>' : ''}
+            ${displayGroup ? '・分群：<span>' + displayGroup + '</span><br>' : ''}
             ・社區優惠碼：<span>${match.coupon}</span><br>
             ・方案代碼：<span>${match.code}</span>
         `;
     }
 
     function clearPlanResult() {
+        LAST_MATCH_HAS_GROUP = false;
         ['planCouponCode', 'planCode'].forEach(id => {
             const el = document.getElementById(id);
             el.value = '';
@@ -678,8 +640,9 @@
         const speed       = speedSelect.disabled ? "" : speedSelect.value; // 無速率選項時視為空字串，不顯示在片語
         const modSelect  = document.getElementById('selMod');
         const mod        = modSelect.disabled ? "" : modSelect.value; // 無MOD選項時視為空字串，不顯示在片語
-        const groupSelect = document.getElementById('selGroup');
-        const group       = groupSelect.disabled ? "" : groupSelect.value; // 無分群選項時視為空字串，不顯示在片語
+        // 🚀 社區分群改用最上方自動查得的社區分群（communityInfo.group），是否顯示這行看
+        // 最後一次自動比對到的方案組合本身有沒有分群概念（LAST_MATCH_HAS_GROUP，於 finalizeSelection 設定）
+        const group = LAST_MATCH_HAS_GROUP ? (communityInfo.group || "無") : "";
         const planCoupon = document.getElementById('planCouponCode').value || "(未填)";
         const planCode   = document.getElementById('planCode').value || "(未填)";
         // 🚀 社區名稱／識別碼改為由社區代碼查詢結果組成，不再手動輸入
